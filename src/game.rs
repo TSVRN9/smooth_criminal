@@ -1,21 +1,39 @@
-/// 0 is cooperate, 1 is defect
-pub type Strategy = dyn Fn(&Game, usize) -> f64;
-pub type GameResult = [f64; 2];
+pub const COOPERATE: f64 = 0.0;
+pub const DEFECT: f64 = 1.0;
+pub const NUM_ROUNDS: usize = 200;
 
-pub struct Game {
-    history: [[f64; 200]; 2]
+pub const R: f64 = 2.0;
+pub const P: f64 = 1.0;
+pub const T: f64 = 3.0;
+pub const S: f64 = 0.0;
+
+pub type GameResult = (f64, f64);
+pub type GameHistory = Vec<(f64, f64)>;
+pub type Strategy = dyn Fn(&GameHistory) -> f64;
+
+
+pub fn play_round(x: f64, y: f64) -> GameResult {
+    return (eval(x, y), eval(y, x));
 }
 
-const COOPERATE: i32 = 0;
-const DEFECT: i32 = 1;
+pub fn play_strategies(first: &Strategy, second: &Strategy) -> GameResult {
+    let mut history: GameHistory = vec![];
+    let mut results: GameResult = (0.0, 0.0);
 
-pub fn play_one_round(first: &Strategy, second: &Strategy, game: &Game, current_round: usize) -> GameResult {
-    let defect = [first(game, current_round), second(game, current_round)];
-    let cooperation = defect.map(|n| 1.0 - n);
+    for _ in 0..NUM_ROUNDS {
+        let alt_history = &history.iter().map(|(a, b)| (*b, *a)).collect();
+
+        let x = first(&history);
+        let y = second(&alt_history);
+
+        let result = play_round(x, y);
+        results = (results.0 + result.0, results.1 + result.1);
+        history.push((x, y));
+    }
     
-    let mut result = [0.0; 2];
+    return results;
+}
 
-    
-
-    return result;
+pub fn eval(you: f64, other: f64) -> f64 {
+    you - (2.0 * other) + 2.0
 }
