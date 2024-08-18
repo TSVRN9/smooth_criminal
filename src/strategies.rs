@@ -1,8 +1,10 @@
 /// Implementations of https://plato.stanford.edu/entries/prisoner-dilemma/strategy-table.html
 pub mod classic {
-    use crate::{GameHistory, COOPERATE, DEFECT, P, R, S, T};
+    use crate::{
+        strategies::util::to_nearest_move, GameHistory, GameMove, COOPERATE, DEFECT, P, R, S, T,
+    };
 
-    use super::util;
+    use super::util::{self, is_defection, to_opposite};
 
     pub fn unconditional_cooperator(_: &GameHistory) -> f64 {
         COOPERATE
@@ -35,6 +37,8 @@ pub mod classic {
             .last()
             .map(util::to_opponent_move)
             .map_or(DEFECT, |opponent_move| {
+                let opponent_move = to_nearest_move(opponent_move);
+
                 if util::is_defection(&opponent_move) {
                     let g: f64 = (1.0 - ((T - R) / (R - S))).min((R - P) / (T - P));
                     if rand::random::<f64>() < g {
@@ -74,15 +78,18 @@ pub mod classic {
     //    }
 
     pub fn imperfect_tit_for_tat(history: &GameHistory) -> f64 {
+        const ACCURACY: f64 = 0.95;
+
         history
             .last()
             .map(util::to_opponent_move)
             .map_or(COOPERATE, |opponent_move| {
-                const ACCURACY: f64 = 0.95;
+                let opponent_move = to_nearest_move(opponent_move);
+
                 if rand::random::<f64>() < ACCURACY {
                     opponent_move
                 } else {
-                    1.0 - opponent_move
+                    to_opposite(opponent_move)
                 }
             })
     }
@@ -135,16 +142,27 @@ pub mod classic {
             .map(util::to_opponent_move)
             .any(|m| util::is_defection(&m));
 
-        if any_defections { DEFECT } else { COOPERATE }
+        if any_defections {
+            DEFECT
+        } else {
+            COOPERATE
+        }
     }
 
-    pub fn 
+    pub fn pavlov(history: &GameHistory) -> f64 {
+        history.last().map_or(COOPERATE, |GameMove(m, o)| {
+            match (is_defection(m), is_defection(o)) {
+                (false, false) | (true, false) => *m,            // R, T
+                (false, true) | (true, true) => to_opposite(*m), // P, S
+            }
+        })
+    }
 }
 
 mod util {
     const DEFECTION_THRESHOLD: f64 = 0.5; // 0.0 is COOPERATE
 
-    use crate::GameMove;
+    use crate::{GameMove, COOPERATE, DEFECT};
 
     pub fn to_opponent_move(GameMove(_, opponent_move): &GameMove) -> f64 {
         *opponent_move
@@ -160,5 +178,17 @@ mod util {
 
     pub fn is_defection(m: &f64) -> bool {
         m >= &DEFECTION_THRESHOLD
+    }
+
+    pub fn to_nearest_move(m: f64) -> f64 {
+        if is_cooperation(&m) {
+            COOPERATE
+        } else {
+            DEFECT
+        }
+    }
+
+    pub fn to_opposite(m: f64) -> f64 {
+        1.0 - m
     }
 }
