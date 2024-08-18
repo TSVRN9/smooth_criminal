@@ -1,7 +1,8 @@
 /// Implementations of https://plato.stanford.edu/entries/prisoner-dilemma/strategy-table.html
 pub mod classic {
     use crate::{
-        strategies::util::to_nearest_move, GameHistory, GameMove, COOPERATE, DEFECT, P, R, S, T,
+        strategies::util::to_nearest_move, GameHistory, GameMove, Strategy, COOPERATE, DEFECT, P,
+        R, S, T,
     };
 
     use super::util::{self, is_defection, to_opposite};
@@ -156,6 +157,32 @@ pub mod classic {
                 (false, true) | (true, true) => to_opposite(*m), // P, S
             }
         })
+    }
+
+    #[derive(Debug, Clone)]
+    pub struct NPavlov {
+        p: f64,
+    }
+
+    impl NPavlov {
+        pub fn init() -> Self {
+            NPavlov { p: 1.0 }
+        }
+    }
+
+    impl Strategy for NPavlov {
+        // unsure if https://plato.stanford.edu/entries/prisoner-dilemma/strategy-table.html has the right implementation?
+        fn next_move(&mut self, last_move: Option<GameMove>, history: &GameHistory) -> f64 {
+            self.p += history.last().map_or(COOPERATE, |GameMove(m, o)| {
+                match (is_defection(m), is_defection(o)) {
+                    (false, false) | (true, false) => 0.25, // R, T
+                    (false, true) | (true, true) => -0.25,  // P, S
+                }
+            });
+            self.p = self.p.clamp(0.0, 1.0);
+            
+            if (self.p < )
+        }
     }
 }
 

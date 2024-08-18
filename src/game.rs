@@ -1,6 +1,6 @@
 pub const COOPERATE: f64 = 0.0;
 pub const DEFECT: f64 = 1.0;
-pub const NUM_ROUNDS: usize = 200;
+pub const NUM_ROUNDS: usize = 1000;
 
 pub const R: f64 = 2.0;
 pub const P: f64 = 1.0;
@@ -13,7 +13,7 @@ pub struct GameResult(pub f64, pub f64);
 pub struct GameMove(pub f64, pub f64);
 pub type GameHistory = Vec<GameMove>;
 
-pub trait Strategy {
+pub trait Strategy: Clone {
     fn next_move(&mut self, last_move: Option<GameMove>, history: &GameHistory) -> f64;
 }
 
@@ -38,7 +38,7 @@ pub fn play_round(x: f64, y: f64) -> GameResult {
     return GameResult(eval(x, y), eval(y, x));
 }
 
-pub fn play_strategies(first: &mut dyn Strategy, second: &mut dyn Strategy) -> GameResult {
+pub fn play_strategies(first: &mut impl Strategy, second: &mut impl Strategy) -> GameResult {
     let mut results: GameResult = GameResult(0.0, 0.0);
 
     let mut history = vec![];
