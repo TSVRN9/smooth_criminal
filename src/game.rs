@@ -1,3 +1,5 @@
+use dyn_clone::DynClone;
+
 pub const COOPERATE: f64 = 0.0;
 pub const DEFECT: f64 = 1.0;
 pub const NUM_ROUNDS: usize = 1000;
@@ -13,9 +15,11 @@ pub struct GameResult(pub f64, pub f64);
 pub struct GameMove(pub f64, pub f64);
 pub type GameHistory = Vec<GameMove>;
 
-pub trait Strategy {
+pub trait Strategy: DynClone {
     fn next_move(&mut self, last_move: Option<GameMove>, history: &GameHistory) -> f64;
 }
+
+dyn_clone::clone_trait_object!(Strategy);
 
 #[derive(Clone, Debug)]
 struct FunctionalStrategyImpl {
