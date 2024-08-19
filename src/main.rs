@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 mod game;
 mod strategies {
     pub mod classic;
@@ -6,36 +8,57 @@ mod strategies {
 }
 
 use strategies::{classic, continuous};
-
 use crate::game::*;
+use csv::Writer;
+use plotters::prelude::*;
+use std::{error::Error, fs};
 
-fn main() {
-    let strategies: Vec<(&'static str, Box<dyn Strategy>)> = vec![
-        classic::all(),
-        continuous::all(),
-    ].into_iter().flatten().collect();
+fn main() -> Result<(), Box<dyn Error>> {
+    let strategies: Vec<(&'static str, Box<dyn Strategy>)> =
+        vec![classic::all(), continuous::all()]
+            .into_iter()
+            .flatten()
+            .collect();
 
-    for (first_name, first_strategy) in strategies.iter() {
-        let (wins, ties, losses, points) = strategies
-            .iter()
-            .map(|(second_name, second_strategy)| {
-                let mut first_strategy = dyn_clone::clone(&*first_strategy);
-                let mut second_strategy = dyn_clone::clone(&*second_strategy);
+    let results = run_tournament(strategies);
 
-                let GameResult(first_score, second_score) =
-                    play_strategies(&mut first_strategy, &mut second_strategy);
+    write_results_to_csv(&results)?;
+    generate_performance_image(&results)?;
 
-                println!("{first_name} - {first_score} vs. {second_score} - {second_name}");
+    Ok(())
+}
 
-                match first_score.total_cmp(&second_score) {
-                    std::cmp::Ordering::Greater => (1, 0, 0, first_score),
-                    std::cmp::Ordering::Equal => (0, 1, 0, first_score),
-                    std::cmp::Ordering::Less => (0, 0, 1, first_score),
-                }
-            })
-            .reduce(|a, b| (a.0 + b.0, a.1 + b.1, a.2 + b.2, a.3 + b.3))
-            .expect("0 Games played??");
 
-        println!("--------------{first_name} with {points} points, {wins} wins, {ties} ties, {losses} losses------------------");
+fn run_tournament(strategies: Vec<(&'static str, Box<dyn Strategy>)>) -> Vec<(&'static str, &'static str, GameResult)>{
+    let r = strategies.iter().map(|(first_name, first_strategy)| {
+        strategies.iter().map(|(second_name, second_strategy)| {
+            let mut first_strategy = dyn_clone::clone(&*first_strategy);
+            let mut second_strategy = dyn_clone::clone(&*second_strategy);
+
+            (*first_name, *second_name, play_strategies(&mut first_strategy, &mut second_strategy))
+        })
+    }).flatten().collect();
+
+    r
+}
+
+fn write_results_to_csv(results: &Vec<(&'static str, &'static str, GameResult)>) -> Result<(), Box<dyn Error>> {
+    let dir = "results";
+    let filename = "results.csv";
+
+    fs::create_dir_all("results")?;
+
+    let mut wtr = Writer::from_path(format!("{}/{}", dir, filename))?;
+    wtr.write_record(&["First Strategy", "Second Strategy", "First Score", "Second Score"])?;
+
+    for (first_name, second_name, GameResult(first_score, second_score)) in results {
+        wtr.write_record(&[first_name, second_name, &first_score.to_string().as_str(), &second_score.to_string().as_str()])?;
     }
+
+    wtr.flush()?;
+    Ok(())
+}
+
+fn generate_performance_image(results: &Vec<(&'static str, &'static str, GameResult)>) -> Result<(), Box<dyn Error>> {
+    todo!();
 }

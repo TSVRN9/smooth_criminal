@@ -63,11 +63,17 @@ pub fn random(_: &GameHistory) -> f64 {
 // skip p_cooperator
 
 pub fn tit_for_tat(history: &GameHistory) -> f64 {
-    history.last().map(utils::to_opponent_move).map_or(COOPERATE, utils::to_nearest_move)
+    history
+        .last()
+        .map(utils::to_opponent_move)
+        .map_or(COOPERATE, utils::to_nearest_move)
 }
 
 pub fn suspicious_tit_for_tat(history: &GameHistory) -> f64 {
-    history.last().map(utils::to_opponent_move).map_or(DEFECT, utils::to_nearest_move)
+    history
+        .last()
+        .map(utils::to_opponent_move)
+        .map_or(DEFECT, utils::to_nearest_move)
 }
 
 pub fn generous_tit_for_tat(history: &GameHistory) -> f64 {
