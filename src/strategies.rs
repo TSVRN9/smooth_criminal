@@ -172,16 +172,20 @@ pub mod classic {
 
     impl Strategy for NPavlov {
         // unsure if https://plato.stanford.edu/entries/prisoner-dilemma/strategy-table.html has the right implementation?
-        fn next_move(&mut self, last_move: Option<GameMove>, history: &GameHistory) -> f64 {
-            self.p += history.last().map_or(COOPERATE, |GameMove(m, o)| {
-                match (is_defection(m), is_defection(o)) {
-                    (false, false) | (true, false) => 0.25, // R, T
-                    (false, true) | (true, true) => -0.25,  // P, S
+        fn next_move(&mut self, last_move: Option<GameMove>, _history: &GameHistory) -> f64 {
+            self.p += last_move.map_or(COOPERATE, |GameMove(m, o)| {
+                match (is_defection(&m), is_defection(&o)) {
+                    (false, false) | (true, true) => 0.25, // R, P
+                    (false, true) | (true, false) => -0.25,  // T, S
                 }
             });
             self.p = self.p.clamp(0.0, 1.0);
             
-            if (self.p < )
+            if self.p < rand::random() {
+                COOPERATE
+            } else {
+                DEFECT
+            }
         }
     }
 }

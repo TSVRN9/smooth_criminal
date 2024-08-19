@@ -6,7 +6,7 @@ use crate::strategies::classic::*;
 use rayon::prelude::*;
 
 fn main() {
-    let strategies = vec![
+    let strategies = [
         (
             "Classic Unconditional Cooperator",
             from_functional(unconditional_cooperator),
@@ -39,10 +39,11 @@ fn main() {
         ),
         ("Classic Grim", from_functional(grim)),
         ("Classic Pavlov", from_functional(pavlov)),
+        ("Classic 4Pavlov", Box::new(NPavlov::init()))
     ];
 
     for (first_name, first_strategy) in strategies.iter() {
-        let (wins, ties, losses, points) = strategies.par_iter().map(|(second_name, second_strategy)| {
+        let (wins, ties, losses, points) = strategies.iter().map(|(second_name, second_strategy)| {
             let mut first_strategy = first_strategy.clone();
             let mut second_strategy = second_strategy.clone();
 
@@ -56,7 +57,7 @@ fn main() {
                 std::cmp::Ordering::Equal => (0, 1, 0, first_score),
                 std::cmp::Ordering::Less => (0, 0, 1, first_score),
             }
-        }).reduce(|| (0, 0, 0, 0.0), |a, b| (a.0 + b.0, a.1 + b.1, a.2 + b.2, a.3 + b.3));
+        }).reduce(|a, b| (a.0 + b.0, a.1 + b.1, a.2 + b.2, a.3 + b.3)).expect("0 Games played??");
 
         println!("--------------{first_name} with {points} points, {wins} wins, {ties} ties, {losses} losses------------------");
     }

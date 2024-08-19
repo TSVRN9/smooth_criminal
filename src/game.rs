@@ -13,7 +13,7 @@ pub struct GameResult(pub f64, pub f64);
 pub struct GameMove(pub f64, pub f64);
 pub type GameHistory = Vec<GameMove>;
 
-pub trait Strategy: Clone {
+pub trait Strategy {
     fn next_move(&mut self, last_move: Option<GameMove>, history: &GameHistory) -> f64;
 }
 
@@ -29,7 +29,7 @@ impl Strategy for FunctionalStrategyImpl {
 }
 
 impl GameMove {
-    pub fn switch_perspectives(&self) -> Self {
+    pub fn switch_perspectives(&self) -> GameMove {
         GameMove(self.1, self.0)
     }
 }
@@ -38,7 +38,7 @@ pub fn play_round(x: f64, y: f64) -> GameResult {
     return GameResult(eval(x, y), eval(y, x));
 }
 
-pub fn play_strategies(first: &mut impl Strategy, second: &mut impl Strategy) -> GameResult {
+pub fn play_strategies(first: &mut Box<dyn Strategy>, second: &mut Box<dyn Strategy>) -> GameResult {
     let mut results: GameResult = GameResult(0.0, 0.0);
 
     let mut history = vec![];
@@ -69,6 +69,6 @@ fn eval(you: f64, other: f64) -> f64 {
     you - (2.0 * other) + 2.0
 }
 
-pub fn from_functional(f: fn(&GameHistory) -> f64) -> impl Strategy {
-    FunctionalStrategyImpl { strategy: f }
+pub fn from_functional(f: fn(&GameHistory) -> f64) -> Box<dyn Strategy> {
+    Box::new(FunctionalStrategyImpl { strategy: f })
 }
