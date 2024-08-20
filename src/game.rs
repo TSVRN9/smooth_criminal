@@ -15,7 +15,7 @@ pub struct GameResult(pub f64, pub f64);
 pub struct GameMove(pub f64, pub f64);
 pub type GameHistory = Vec<GameMove>;
 
-pub trait Strategy: DynClone {
+pub trait Strategy: DynClone + Send {
     fn next_move(&mut self, last_move: Option<GameMove>, history: &GameHistory) -> f64;
 }
 
