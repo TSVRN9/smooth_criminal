@@ -8,13 +8,13 @@ mod strategies {
 }
 
 use crate::game::*;
+use ab_glyph::{FontRef, PxScale};
 use csv::Writer;
 use imageproc::{
     drawing::{draw_text_mut, text_size},
     image::{Pixel, Rgb, RgbImage},
 };
 use itertools::Itertools;
-use ab_glyph::{FontRef, PxScale};
 use std::{error::Error, path::Path};
 use strategies::{classic, continuous};
 use tokio::fs;
@@ -47,8 +47,8 @@ async fn run_competition(
 ) -> Vec<(&'static str, &'static str, GameResult)> {
     let mut tasks = vec![];
 
-    for (i, (first_name, first_strategy)) in strategies.iter().enumerate() {
-        for (second_name, second_strategy) in strategies.iter().take(i + 1) {
+    for (first_name, first_strategy) in strategies.iter() {
+        for (second_name, second_strategy) in strategies.iter() {
             let first_name = *first_name;
             let second_name = *second_name;
             let mut first_strategy = dyn_clone::clone(&*first_strategy);
@@ -117,7 +117,8 @@ async fn generate_performance_image(
     let font = {
         let data = include_bytes!("../assets/RobotoMono-Regular.ttf");
         FontRef::try_from_slice(data)
-    }.expect("Could not load font!");
+    }
+    .expect("Could not load font!");
 
     let strategy_names = results
         .iter()
@@ -132,69 +133,90 @@ async fn generate_performance_image(
         .max_by(|a, b| a.total_cmp(b))
         .expect("No maximum found, is the Vec empty?");
 
-    let cell_size = 20;
+    let cell_size = 40;
 
-    let scale = Scale::uniform((cell_size - 2) as f32);
+    let font_size = 36.0;
+    let scale = PxScale {
+        x: font_size,
+        y: font_size,
+    };
     let padding = 10;
 
     // thanks chatgpt
     let max_text_width = strategy_names
         .iter()
-        .map(|name| {
-            calculate_text_width(name, &font, scale)
-        })
+        .map(|name| text_size(scale, &font, name).0)
         .max()
         .unwrap_or(0)
+        + text_size(scale, &font, " - 0.00 ppr").0
         + padding * 2; // Add some padding
 
-    let img_width = strategy_names.len() * cell_size + max_text_width;
+    let img_width = strategy_names.len() * cell_size + max_text_width as usize;
     let img_height = strategy_names.len() * cell_size;
 
     let mut img = RgbImage::new(img_width as u32, img_height as u32);
+    let mut pprs: Vec<f64> = vec![];
 
     for (i, first_name) in strategy_names.iter().enumerate() {
-        for (j, second_name) in strategy_names.iter().take(i + 1).enumerate() {
+        let mut points = 0.0;
+        for (j, second_name) in strategy_names.iter().enumerate() {
             if let Some((_, _, GameResult(first_score, second_score))) = results
                 .iter()
                 .find(|(f, s, _)| f == first_name && s == second_name)
             {
-                let delta = first_score - second_score;
-                let delta_percent = delta / max_point_delta / 2.0 + 0.5;
+                let color = {
+                    let delta = first_score - second_score;
+                    let delta_percent = delta / max_point_delta;
+                    let default = Rgb([0, 0, 0]);
 
-                let default = Rgb([251, 232, 255]); // nice shade of purple
-
-                let red = Rgb([255, 20, 20]);
-                let blue = Rgb([20, 20, 255]);
-
-                let to_blend_with = if delta > 0.5 { blue } else { red };
-
-                let color = default.map2(&to_blend_with, |d, b| {
-                    (d as f64 * (1.0 - delta_percent) + b as f64 * delta_percent) as u8
-                });
+                    calculate_color(delta_percent, default)
+                };
 
                 for x in 0..cell_size {
                     for y in 0..cell_size {
                         img.put_pixel(
-                            (j * cell_size + y + max_text_width) as u32,
+                            max_text_width + (j * cell_size + y) as u32,
                             (i * cell_size + x) as u32,
                             color,
                         );
                     }
                 }
 
-                let text_width = calculate_text_width(first_name, &font, scale);
-
-                draw_text_mut(
-                    &mut img,
-                    Rgb([255, 255, 255]),
-                    (max_text_width - (padding + text_width)) as i32,
-                    (i * cell_size) as i32,
-                    scale,
-                    &font,
-                    text,
-                )
+                points += first_score;
             }
         }
+
+        let ppr = points / (NUM_ROUNDS * strategy_names.len()) as f64;
+        pprs.push(ppr);
+    }
+
+    let average_ppr = pprs.iter().sum::<f64>() / pprs.len() as f64;
+    let max_outlier_ppr = pprs
+        .iter()
+        .map(|m| (m - average_ppr).abs())
+        .max_by(|a, b| a.total_cmp(b))
+        .expect("No max outlier ppr found, is strategies array empty?");
+
+    for (i, first_name) in strategy_names.iter().enumerate() {
+        let ppr = pprs.get(i).unwrap();
+
+        let text = format!("{} {}", *first_name, (ppr * 100.0).round() as usize);
+        let text_width = text_size(scale, &font, &text).0;
+        let color = {
+            let delta = (ppr - average_ppr).clamp(-max_outlier_ppr * 0.95, max_outlier_ppr * 0.95);
+            let delta_percent = delta / max_outlier_ppr;
+            calculate_color(delta_percent, Rgb([255, 255, 255]))
+        };
+
+        draw_text_mut(
+            &mut img,
+            color,
+            (max_text_width - (padding + text_width)) as i32,
+            (i * cell_size) as i32,
+            scale,
+            &font,
+            &text,
+        )
     }
 
     // directory must be created before we save
@@ -204,15 +226,13 @@ async fn generate_performance_image(
     Ok(())
 }
 
-fn calculate_text_width(text: &str, font: &Font, scale: Scale) -> usize {
-    let v_metrics = font.v_metrics(scale);
-    let glyphs: Vec<_> = font
-        .layout(text, scale, rusttype::point(0.0, v_metrics.ascent))
-        .collect();
-    let width = glyphs
-        .iter()
-        .rev()
-        .find_map(|g| g.pixel_bounding_box().map(|b| b.max.x as f32))
-        .unwrap_or(0.0);
-    width as usize
+fn calculate_color(delta_percent: f64, default: Rgb<u8>) -> Rgb<u8> {
+    let red = Rgb([255, 50, 50]);
+    let blue = Rgb([50, 50, 255]);
+
+    let to_blend_with = if delta_percent > 0.0 { blue } else { red };
+
+    default.map2(&to_blend_with, |d, b| {
+        (d as f64 * (1.0 - delta_percent.abs()) + b as f64 * delta_percent.abs()) as u8
+    })
 }
