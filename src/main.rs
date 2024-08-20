@@ -16,8 +16,11 @@ use imageproc::{
     rect::Rect,
 };
 use itertools::Itertools;
-use rayon::{iter::{IntoParallelRefIterator, ParallelIterator}, slice::ParallelSlice};
-use std::{cmp::Ordering, error::Error, path::Path};
+use rayon::{
+    iter::{IntoParallelRefIterator, ParallelIterator},
+    slice::ParallelSlice,
+};
+use std::{error::Error, path::Path};
 use strategies::{classic, continuous};
 use tokio::fs;
 
@@ -36,7 +39,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     tokio::try_join!(
         write_raw_results_to_csv("results/raw.csv", &results),
-        generate_performance_image("results/performance.png", &results)
+        generate_performance_image("results/performance.png", &results, 40, 30.0, 20)
     )?;
 
     println!("Done!");
@@ -111,6 +114,9 @@ async fn write_raw_results_to_csv(
 async fn generate_performance_image(
     path: &str,
     results: &Vec<(&'static str, &'static str, GameResult)>,
+    cell_size: u32,
+    font_size: f32,
+    padding: u32,
 ) -> Result<(), Box<dyn Error>> {
     let path = Path::new(path);
     let dir = path.parent().ok_or("Invalid Path")?;
@@ -128,23 +134,12 @@ async fn generate_performance_image(
         .dedup()
         .collect::<Vec<_>>();
 
-    let differences = results.iter().map(|(_, _, GameResult(a, b))| a - b);
-
-    let max_point_delta = differences
-        .clone()
-        .max_by(|a, b| a.total_cmp(b))
-        .expect("No maximum found, is the Vec empty?");
-
-    let cell_size = 40;
-
-    let font_size = 36.0;
     let scale = PxScale {
         x: font_size,
         y: font_size,
     };
-    let padding = 20;
 
-    // thanks chatgpt
+    // thanks for nothing chatgpt
     let max_text_width = strategy_names
         .iter()
         .map(|name| text_size(scale, &font, name).0)
@@ -156,95 +151,73 @@ async fn generate_performance_image(
     let img_width = strategy_names.len() as u32 * cell_size + max_text_width;
     let img_height = strategy_names.len() as u32 * cell_size;
 
-    let grid_width = strategy_names.len();
-
     let mut img = RgbImage::new(img_width, img_height);
 
-    let colors = results.par_iter().map(
-        |(_, _, GameResult(first_score, second_score))| {
-            let delta = first_score - second_score;
-            let delta_percent = delta / max_point_delta;
+    let grid_width = strategy_names.len();
+
+    let deltas: Vec<_> = results
+        .iter()
+        .map(|(_, _, GameResult(a, b))| a - b)
+        .collect();
+
+    let max_point_delta = deltas
+        .par_iter()
+        .map(|f| f.abs())
+        .max_by(|a, b| a.total_cmp(b))
+        .expect("No maximum found, is the Vec empty?");
+
+    let delta_percents = deltas
+        .par_iter()
+        .map(|d| d / max_point_delta)
+        .collect::<Vec<_>>();
+
+    let grid_colors = delta_percents
+        .par_iter()
+        .map(|d| {
             let default = Rgb([0, 0, 0]);
+            calculate_color(*d, default)
+        })
+        .collect();
 
-            calculate_color(delta_percent, default)
-        }
-    ).collect();
+    let average_deltas = deltas
+        .par_chunks_exact(grid_width)
+        .map(|d| d.iter().sum::<f64>() / d.len() as f64)
+        .collect::<Vec<_>>();
 
-    // TODO let records = results.as_slice().par_chunks(grid_width).map 
+    let most_deviant_average = average_deltas
+        .par_iter()
+        .map(|f| f.abs())
+        .max_by(|a, b| a.total_cmp(b))
+        .expect("Could not get max deviant average, is it empty?");
 
-    // for _ in strategy_names.iter().enumerate() {
-    //     let mut points = 0.0;
-    //     let mut wins = 0;
-    //     let mut loss = 0;
-    //     let mut tie = 0;
-
-    //     for (j, second_name) in strategy_names.iter().enumerate() {
-    //         if let Some((_, _, GameResult(first_score, second_score))) = results
-    //             .iter()
-    //             .find(|(f, s, _)| f == first_name && s == second_name)
-    //         {
-    //             let color = {
-    //                 let delta = first_score - second_score;
-    //                 let delta_percent = delta / max_point_delta;
-    //                 let default = Rgb([0, 0, 0]);
-
-    //                 calculate_color(delta_percent, default)
-    //             };
-
-    //             colors.push(color);
-
-    //             points += first_score;
-
-    //             match first_score.total_cmp(second_score) {
-    //                 Ordering::Greater => wins += 1,
-    //                 Ordering::Less => loss += 1,
-    //                 Ordering::Equal => tie += 1,
-    //             };
-    //         }
-    //     }
-
-    //     let ppr = points / (NUM_ROUNDS * strategy_names.len()) as f64;
-    //     pprs.push(ppr);
-    //     record.push((wins, loss, tie));
-    // }
+    let label_colors = average_deltas.par_iter()
+        .map(|d| {
+            let deviancy = d / most_deviant_average;
+            let default = Rgb([255, 255, 255]);
+            calculate_color(deviancy, default)
+        })
+        .collect();
 
     draw_color_grid_mut(
         &mut img,
-        &colors,
+        &grid_colors,
         grid_width,
         cell_size,
         max_text_width as i32,
         0,
     );
 
-    // let average_ppr = pprs.iter().sum::<f64>() / pprs.len() as f64;
-    // let max_outlier_ppr = pprs
-    //     .iter()
-    //     .map(|m| (m - average_ppr).abs())
-    //     .max_by(|a, b| a.total_cmp(b))
-    //     .expect("No max outlier ppr found, is strategies array empty?");
-
-    // for (i, first_name) in strategy_names.iter().enumerate() {
-    //     let ppr = pprs.get(i).unwrap();
-
-    //     let text = format!("{} {}", *first_name, (ppr * 100.0).round() as usize);
-    //     let text_width = text_size(scale, &font, &text).0;
-    //     let color = {
-    //         let delta = (ppr - average_ppr).clamp(-max_outlier_ppr * 0.95, max_outlier_ppr * 0.95);
-    //         let delta_percent = delta / max_outlier_ppr;
-    //         calculate_color(delta_percent, Rgb([255, 255, 255]))
-    //     };
-
-    //     draw_text_mut(
-    //         &mut img,
-    //         color,
-    //         (max_text_width - (padding + text_width)) as i32,
-    //         (i * cell_size as usize) as i32,
-    //         scale,
-    //         &font,
-    //         &text,
-    //     )
-    // }
+    draw_grid_labels_mut(
+        &mut img,
+        &label_colors,
+        &strategy_names,
+        &font,
+        &scale,
+        max_text_width.try_into().unwrap(),
+        (cell_size + padding).try_into().unwrap(),
+        padding.try_into().unwrap(),
+        0,
+    );
 
     // directory must be created before we save
     create_dirs_future.await?;
@@ -256,14 +229,14 @@ async fn generate_performance_image(
 fn draw_color_grid_mut(
     image: &mut ImageBuffer<Rgb<u8>, Vec<u8>>,
     colors: &Vec<Rgb<u8>>,
-    width: usize,
+    colors_width: usize,
     cell_size: u32,
     x: i32,
     y: i32,
 ) {
     for (i, color) in colors.iter().enumerate() {
-        let j = i % width;
-        let i = i / width;
+        let j = i % colors_width;
+        let i = i / colors_width;
 
         drawing::draw_filled_rect_mut(
             image,
@@ -277,13 +250,40 @@ fn draw_color_grid_mut(
     }
 }
 
-fn calculate_color(delta_percent: f64, default: Rgb<u8>) -> Rgb<u8> {
+fn draw_grid_labels_mut(
+    image: &mut ImageBuffer<Rgb<u8>, Vec<u8>>,
+    colors: &Vec<Rgb<u8>>,
+    labels: &Vec<&str>,
+    font: &FontRef,
+    scale: &PxScale,
+    width: i32,
+    cell_size: i32,
+    x: i32,
+    y: i32,
+) {
+    assert_eq!(colors.len(), labels.len());
+    for (i, (&label, &color)) in labels.iter().zip(colors).enumerate() {
+        let text_width = text_size(*scale, &font, label).0 as i32;
+
+        draw_text_mut(
+            image,
+            color,
+            x + width - text_width,
+            y + (i * cell_size as usize) as i32,
+            *scale,
+            &font,
+            label,
+        )
+    }
+}
+
+fn calculate_color(deviation_percent: f64, default: Rgb<u8>) -> Rgb<u8> {
     let red = Rgb([255, 50, 50]);
     let blue = Rgb([50, 50, 255]);
 
-    let to_blend_with = if delta_percent > 0.0 { blue } else { red };
+    let to_blend_with = if deviation_percent > 0.0 { blue } else { red };
 
     default.map2(&to_blend_with, |d, b| {
-        (d as f64 * (1.0 - delta_percent.abs()) + b as f64 * delta_percent.abs()) as u8
+        (d as f64 * (1.0 - deviation_percent.abs()) + b as f64 * deviation_percent.abs()) as u8
     })
 }
