@@ -1136,6 +1136,7 @@ dependencies = [
  "imageproc",
  "itertools 0.13.0",
  "rand",
+ "rayon",
  "tokio",
 ]
 

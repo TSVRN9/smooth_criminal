@@ -11,11 +11,13 @@ use crate::game::*;
 use ab_glyph::{FontRef, PxScale};
 use csv::Writer;
 use imageproc::{
-    drawing::{draw_text_mut, text_size},
-    image::{Pixel, Rgb, RgbImage},
+    drawing::{self, draw_text_mut, text_size},
+    image::{ImageBuffer, Pixel, Rgb, RgbImage},
+    rect::Rect,
 };
 use itertools::Itertools;
-use std::{error::Error, path::Path};
+use rayon::{iter::{IntoParallelRefIterator, ParallelIterator}, slice::ParallelSlice};
+use std::{cmp::Ordering, error::Error, path::Path};
 use strategies::{classic, continuous};
 use tokio::fs;
 
@@ -140,7 +142,7 @@ async fn generate_performance_image(
         x: font_size,
         y: font_size,
     };
-    let padding = 10;
+    let padding = 20;
 
     // thanks chatgpt
     let max_text_width = strategy_names
@@ -148,82 +150,131 @@ async fn generate_performance_image(
         .map(|name| text_size(scale, &font, name).0)
         .max()
         .unwrap_or(0)
-        + text_size(scale, &font, " - 0.00 ppr").0
+        + text_size(scale, &font, " 000").0
         + padding * 2; // Add some padding
 
-    let img_width = strategy_names.len() * cell_size + max_text_width as usize;
-    let img_height = strategy_names.len() * cell_size;
+    let img_width = strategy_names.len() as u32 * cell_size + max_text_width;
+    let img_height = strategy_names.len() as u32 * cell_size;
 
-    let mut img = RgbImage::new(img_width as u32, img_height as u32);
-    let mut pprs: Vec<f64> = vec![];
+    let grid_width = strategy_names.len();
 
-    for (i, first_name) in strategy_names.iter().enumerate() {
-        let mut points = 0.0;
-        for (j, second_name) in strategy_names.iter().enumerate() {
-            if let Some((_, _, GameResult(first_score, second_score))) = results
-                .iter()
-                .find(|(f, s, _)| f == first_name && s == second_name)
-            {
-                let color = {
-                    let delta = first_score - second_score;
-                    let delta_percent = delta / max_point_delta;
-                    let default = Rgb([0, 0, 0]);
+    let mut img = RgbImage::new(img_width, img_height);
 
-                    calculate_color(delta_percent, default)
-                };
+    let colors = results.par_iter().map(
+        |(_, _, GameResult(first_score, second_score))| {
+            let delta = first_score - second_score;
+            let delta_percent = delta / max_point_delta;
+            let default = Rgb([0, 0, 0]);
 
-                for x in 0..cell_size {
-                    for y in 0..cell_size {
-                        img.put_pixel(
-                            max_text_width + (j * cell_size + y) as u32,
-                            (i * cell_size + x) as u32,
-                            color,
-                        );
-                    }
-                }
-
-                points += first_score;
-            }
+            calculate_color(delta_percent, default)
         }
+    ).collect();
 
-        let ppr = points / (NUM_ROUNDS * strategy_names.len()) as f64;
-        pprs.push(ppr);
-    }
+    // TODO let records = results.as_slice().par_chunks(grid_width).map 
 
-    let average_ppr = pprs.iter().sum::<f64>() / pprs.len() as f64;
-    let max_outlier_ppr = pprs
-        .iter()
-        .map(|m| (m - average_ppr).abs())
-        .max_by(|a, b| a.total_cmp(b))
-        .expect("No max outlier ppr found, is strategies array empty?");
+    // for _ in strategy_names.iter().enumerate() {
+    //     let mut points = 0.0;
+    //     let mut wins = 0;
+    //     let mut loss = 0;
+    //     let mut tie = 0;
 
-    for (i, first_name) in strategy_names.iter().enumerate() {
-        let ppr = pprs.get(i).unwrap();
+    //     for (j, second_name) in strategy_names.iter().enumerate() {
+    //         if let Some((_, _, GameResult(first_score, second_score))) = results
+    //             .iter()
+    //             .find(|(f, s, _)| f == first_name && s == second_name)
+    //         {
+    //             let color = {
+    //                 let delta = first_score - second_score;
+    //                 let delta_percent = delta / max_point_delta;
+    //                 let default = Rgb([0, 0, 0]);
 
-        let text = format!("{} {}", *first_name, (ppr * 100.0).round() as usize);
-        let text_width = text_size(scale, &font, &text).0;
-        let color = {
-            let delta = (ppr - average_ppr).clamp(-max_outlier_ppr * 0.95, max_outlier_ppr * 0.95);
-            let delta_percent = delta / max_outlier_ppr;
-            calculate_color(delta_percent, Rgb([255, 255, 255]))
-        };
+    //                 calculate_color(delta_percent, default)
+    //             };
 
-        draw_text_mut(
-            &mut img,
-            color,
-            (max_text_width - (padding + text_width)) as i32,
-            (i * cell_size) as i32,
-            scale,
-            &font,
-            &text,
-        )
-    }
+    //             colors.push(color);
+
+    //             points += first_score;
+
+    //             match first_score.total_cmp(second_score) {
+    //                 Ordering::Greater => wins += 1,
+    //                 Ordering::Less => loss += 1,
+    //                 Ordering::Equal => tie += 1,
+    //             };
+    //         }
+    //     }
+
+    //     let ppr = points / (NUM_ROUNDS * strategy_names.len()) as f64;
+    //     pprs.push(ppr);
+    //     record.push((wins, loss, tie));
+    // }
+
+    draw_color_grid_mut(
+        &mut img,
+        &colors,
+        grid_width,
+        cell_size,
+        max_text_width as i32,
+        0,
+    );
+
+    // let average_ppr = pprs.iter().sum::<f64>() / pprs.len() as f64;
+    // let max_outlier_ppr = pprs
+    //     .iter()
+    //     .map(|m| (m - average_ppr).abs())
+    //     .max_by(|a, b| a.total_cmp(b))
+    //     .expect("No max outlier ppr found, is strategies array empty?");
+
+    // for (i, first_name) in strategy_names.iter().enumerate() {
+    //     let ppr = pprs.get(i).unwrap();
+
+    //     let text = format!("{} {}", *first_name, (ppr * 100.0).round() as usize);
+    //     let text_width = text_size(scale, &font, &text).0;
+    //     let color = {
+    //         let delta = (ppr - average_ppr).clamp(-max_outlier_ppr * 0.95, max_outlier_ppr * 0.95);
+    //         let delta_percent = delta / max_outlier_ppr;
+    //         calculate_color(delta_percent, Rgb([255, 255, 255]))
+    //     };
+
+    //     draw_text_mut(
+    //         &mut img,
+    //         color,
+    //         (max_text_width - (padding + text_width)) as i32,
+    //         (i * cell_size as usize) as i32,
+    //         scale,
+    //         &font,
+    //         &text,
+    //     )
+    // }
 
     // directory must be created before we save
     create_dirs_future.await?;
     img.save(path)?;
 
     Ok(())
+}
+
+fn draw_color_grid_mut(
+    image: &mut ImageBuffer<Rgb<u8>, Vec<u8>>,
+    colors: &Vec<Rgb<u8>>,
+    width: usize,
+    cell_size: u32,
+    x: i32,
+    y: i32,
+) {
+    for (i, color) in colors.iter().enumerate() {
+        let j = i % width;
+        let i = i / width;
+
+        drawing::draw_filled_rect_mut(
+            image,
+            Rect::at(
+                x + (j as u32 * cell_size) as i32,
+                y + (i as u32 * cell_size) as i32,
+            )
+            .of_size(cell_size, cell_size),
+            *color,
+        );
+    }
 }
 
 fn calculate_color(delta_percent: f64, default: Rgb<u8>) -> Rgb<u8> {
