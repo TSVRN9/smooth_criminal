@@ -9,6 +9,7 @@ pub mod strategies {
 pub mod image;
 
 use crate::game::*;
+use crate::image::generate_performance_image;
 use csv::Writer;
 use std::{error::Error, path::Path};
 use strategies::{classic, continuous};
@@ -17,7 +18,7 @@ use tokio::fs;
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     let strategies: Vec<(&'static str, Box<dyn Strategy>)> =
-        vec![/* classic::all(), */ continuous::all()]
+        vec![classic::all(), continuous::all()]
             .into_iter()
             .flatten()
             .collect();
@@ -28,9 +29,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
     println!("Processing results...");
 
     tokio::try_join!(
-        // write_raw_results_to_csv("results/raw.csv", &results),
-        // image::generate_performance_image("results/win_loss.png", &results, |GameResult(a, b)| a - b, 40, 36.0, 20),
-        image::generate_performance_image("results/points.png", &results, |GameResult(a, _)| *a, 40, 36.0, 20),
+        write_raw_results_to_csv("results/raw.csv", &results),
+        generate_performance_image("results/win_loss.png", &results, |GameResult(a, b)| a - b, 40, 20, 36.0),
+        generate_performance_image("results/points.png", &results, |GameResult(a, _)| *a, 40, 20, 36.0),
     )?;
 
     println!("Done!");
