@@ -39,7 +39,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     tokio::try_join!(
         write_raw_results_to_csv("results/raw.csv", &results),
-        generate_performance_image("results/performance.png", &results, 40, 30.0, 20)
+        generate_performance_image("results/performance.png", &results, |GameResult(a, b)| a - b, 40, 36.0, 20)
     )?;
 
     println!("Done!");
@@ -114,6 +114,7 @@ async fn write_raw_results_to_csv(
 async fn generate_performance_image(
     path: &str,
     results: &Vec<(&'static str, &'static str, GameResult)>,
+    by: fn(&GameResult) -> f64,
     cell_size: u32,
     font_size: f32,
     padding: u32,
@@ -121,6 +122,11 @@ async fn generate_performance_image(
     let path = Path::new(path);
     let dir = path.parent().ok_or("Invalid Path")?;
     let create_dirs_future = fs::create_dir_all(dir);
+
+    let scale = PxScale {
+        x: font_size,
+        y: font_size,
+    };
 
     let font = {
         let data = include_bytes!("../assets/RobotoMono-Regular.ttf");
@@ -133,11 +139,6 @@ async fn generate_performance_image(
         .map(|(first_name, _, _)| *first_name)
         .dedup()
         .collect::<Vec<_>>();
-
-    let scale = PxScale {
-        x: font_size,
-        y: font_size,
-    };
 
     // thanks for nothing chatgpt
     let max_text_width = strategy_names
@@ -155,67 +156,27 @@ async fn generate_performance_image(
 
     let grid_width = strategy_names.len();
 
-    let deltas: Vec<_> = results
-        .iter()
-        .map(|(_, _, GameResult(a, b))| a - b)
-        .collect();
-
-    let max_point_delta = deltas
-        .par_iter()
-        .map(|f| f.abs())
-        .max_by(|a, b| a.total_cmp(b))
-        .expect("No maximum found, is the Vec empty?");
-
-    let delta_percents = deltas
-        .par_iter()
-        .map(|d| d / max_point_delta)
-        .collect::<Vec<_>>();
-
-    let grid_colors = delta_percents
-        .par_iter()
-        .map(|d| {
-            let default = Rgb([0, 0, 0]);
-            calculate_color(*d, default)
-        })
-        .collect();
-
-    let average_deltas = deltas
-        .par_chunks_exact(grid_width)
-        .map(|d| d.iter().sum::<f64>() / d.len() as f64)
-        .collect::<Vec<_>>();
-
-    let most_deviant_average = average_deltas
-        .par_iter()
-        .map(|f| f.abs())
-        .max_by(|a, b| a.total_cmp(b))
-        .expect("Could not get max deviant average, is it empty?");
-
-    let label_colors = average_deltas.par_iter()
-        .map(|d| {
-            let deviancy = d / most_deviant_average;
-            let default = Rgb([255, 255, 255]);
-            calculate_color(deviancy, default)
-        })
-        .collect();
+    let (grid_colors, label_colors, labels) =
+        calculate_grid_and_labels(|a| by(a), strategy_names, results, grid_width);
 
     draw_color_grid_mut(
         &mut img,
         &grid_colors,
         grid_width,
         cell_size,
-        max_text_width as i32,
+        (max_text_width + padding * 2) as i32,
         0,
     );
 
     draw_grid_labels_mut(
         &mut img,
         &label_colors,
-        &strategy_names,
+        &labels,
         &font,
         &scale,
         max_text_width.try_into().unwrap(),
-        (cell_size + padding).try_into().unwrap(),
-        padding.try_into().unwrap(),
+        cell_size.try_into().unwrap(),
+        padding as i32,
         0,
     );
 
@@ -253,7 +214,7 @@ fn draw_color_grid_mut(
 fn draw_grid_labels_mut(
     image: &mut ImageBuffer<Rgb<u8>, Vec<u8>>,
     colors: &Vec<Rgb<u8>>,
-    labels: &Vec<&str>,
+    labels: &Vec<String>,
     font: &FontRef,
     scale: &PxScale,
     width: i32,
@@ -262,7 +223,7 @@ fn draw_grid_labels_mut(
     y: i32,
 ) {
     assert_eq!(colors.len(), labels.len());
-    for (i, (&label, &color)) in labels.iter().zip(colors).enumerate() {
+    for (i, (label, &color)) in labels.iter().zip(colors).enumerate() {
         let text_width = text_size(*scale, &font, label).0 as i32;
 
         draw_text_mut(
@@ -275,6 +236,80 @@ fn draw_grid_labels_mut(
             label,
         )
     }
+}
+
+fn calculate_grid_and_labels<F>(
+    by: F,
+    strategy_names: Vec<&str>,
+    results: &Vec<(&str, &str, GameResult)>,
+    grid_width: usize,
+) -> (Vec<Rgb<u8>>, Vec<Rgb<u8>>, Vec<String>)
+where
+    F: Fn(&GameResult) -> f64,
+{
+    let values: Vec<_> = results
+        .iter()
+        .map(|(_, _, game_result)| by(game_result))
+        .collect();
+
+    let grid_colors = {
+        let max_deviance = values
+            .par_iter()
+            .map(|f| f.abs())
+            .max_by(|a, b| a.total_cmp(b))
+            .expect("No maximum found, is the Vec empty?");
+
+        let deviance_percents = values
+            .par_iter()
+            .map(|d| d / max_deviance)
+            .collect::<Vec<_>>();
+
+        deviance_percents
+            .par_iter()
+            .map(|d| {
+                let default = Rgb([0, 0, 0]);
+                calculate_color(*d, default)
+            })
+            .collect::<Vec<_>>()
+    };
+
+    let (label_colors, labels) = {
+        let average_values = values
+            .par_chunks_exact(grid_width)
+            .map(|d| d.iter().sum::<f64>() / d.len() as f64)
+            .collect::<Vec<_>>();
+
+        let most_deviant_average = average_values
+            .par_iter()
+            .map(|f| f.abs())
+            .max_by(|a, b| a.total_cmp(b))
+            .expect("Could not get max deviant average, is it empty?");
+
+        let label_colors = average_values
+            .par_iter()
+            .map(|d| {
+                let deviancy = d / most_deviant_average;
+                let default = Rgb([255, 255, 255]);
+                calculate_color(deviancy, default)
+            })
+            .collect::<Vec<_>>();
+
+        let labels: Vec<String> = strategy_names
+            .iter()
+            .zip(average_values)
+            .map(|(name, avg_d)| {
+                format!(
+                    "{} {:+03}",
+                    name,
+                    (100.0 * avg_d / NUM_ROUNDS as f64).round()
+                )
+            })
+            .collect();
+
+        (label_colors, labels)
+    };
+
+    (grid_colors, label_colors, labels)
 }
 
 fn calculate_color(deviation_percent: f64, default: Rgb<u8>) -> Rgb<u8> {
