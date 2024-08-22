@@ -5,6 +5,7 @@ pub mod strategies {
     pub mod classic;
     pub mod continuous;
     pub mod utils;
+    pub mod tsvrn9;
 }
 pub mod image;
 
@@ -12,13 +13,13 @@ use crate::game::*;
 use crate::image::generate_performance_image;
 use csv::Writer;
 use std::{error::Error, path::Path};
-use strategies::{classic, continuous};
+use strategies::{classic, continuous, tsvrn9};
 use tokio::fs;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     let strategies: Vec<(&'static str, Box<dyn Strategy>)> =
-        vec![classic::all(), continuous::all()]
+        vec![classic::all(), continuous::all(), tsvrn9::all()]
             .into_iter()
             .flatten()
             .collect();
