@@ -21,9 +21,20 @@ fn eval(you: f64, other: f64) -> f64 {
 ```
 
 ## Usage
-Running this code will generate a csv file with the results of each matchup, and images representing performance. 
+Running this code with `cargo run --release` will generate a csv file with the results of each matchup, and images representing performance. 
+It is recommended to build the optimized binary, as the increase in build time drastically increases performance.
+
 Units are in average centi-points per round (cppr), where 300 is equivalent to earning 3 points after every round. 
 Red indicates above average performance while blue indicates below average.
-White boxes indicate the CPPR
+Columns are left unlabelled, but follow the same order as the rows from left to right.
+White outlines indicate that the strategy is performing against itself, but can also be used as guidelines.
 
-`points.png` displays the cppr of each strategy in a grid, while `win_loss.png` displays the 
+`points.png` displays the cppr of each strategy in a grid, where blue cells represent above average cppr while red cells represent below average cppr.
+`win_loss.png` displays the difference in cppr between two strategies, where blue cells represent positive cpprs while red represents negative cpprs.
+
+![Example of `points.png`, with labels to the left and a colored grid to the right](./assets/points.png)
+> Example of `points.png`
+
+## Roadmap
+Currently there is no way to view individual matchups and the results of each round. 
+The next iteration will feature an interactive UI to inspect individual matchups, exclude/include strategies, and provide an easy way to import and export data.
