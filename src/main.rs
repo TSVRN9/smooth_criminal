@@ -4,40 +4,41 @@ pub mod game;
 pub mod strategies {
     pub mod classic;
     pub mod continuous;
-    pub mod utils;
     pub mod tsvrn9;
+    pub mod utils;
+}
+pub mod widget {
+    pub mod viewer;
+    pub mod grid;
 }
 pub mod image;
 
 use crate::game::*;
-use crate::image::generate_performance_image;
-use csv::Writer;
-use std::{error::Error, path::Path};
-use strategies::{classic, continuous, tsvrn9};
-use tokio::fs;
+use crate::widget::viewer;
 
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn Error>> {
-    let strategies: Vec<(&'static str, Box<dyn Strategy>)> =
-        vec![classic::all(), continuous::all(), tsvrn9::all()]
-            .into_iter()
-            .flatten()
-            .collect();
+pub fn main() -> iced::Result {
+    iced::run("Viewer", viewer::update, viewer::view)
 
-    println!("Running {} strategies...", strategies.len());
-    let results = run_competition(strategies).await;
+    // let strategies: Vec<(&'static str, Box<dyn Strategy>)> =
+    //     vec![classic::all(), continuous::all(), tsvrn9::all()]
+    //         .into_iter()
+    //         .flatten()
+    //         .collect();
 
-    println!("Processing results...");
+    // println!("Running {} strategies...", strategies.len());
+    // let results = run_competition(strategies).await;
 
-    tokio::try_join!(
-        write_raw_results_to_csv("results/raw.csv", &results),
-        generate_performance_image("results/win_loss.png", &results, |GameResult(a, b)| a - b, 40, 20, 36.0),
-        generate_performance_image("results/points.png", &results, |GameResult(a, _)| *a, 40, 20, 36.0),
-    )?;
+    // println!("Processing results...");
 
-    println!("Done!");
+    // tokio::try_join!(
+    //     write_raw_results_to_csv("results/raw.csv", &results),
+    //     generate_performance_image("results/win_loss.png", &results, |GameResult(a, b)| a - b, 40, 20, 36.0),
+    //     generate_performance_image("results/points.png", &results, |GameResult(a, _)| *a, 40, 20, 36.0),
+    // )?;
 
-    Ok(())
+    // println!("Done!");
+
+    // Ok(())
 }
 
 async fn run_competition(
@@ -72,34 +73,4 @@ async fn run_competition(
     }
 
     results
-}
-
-async fn write_raw_results_to_csv(
-    path: &str,
-    results: &Vec<(&'static str, &'static str, GameResult)>,
-) -> Result<(), Box<dyn Error>> {
-    let path = Path::new(path);
-    let dir = path.parent().ok_or("Invalid Path")?;
-
-    fs::create_dir_all(dir).await?;
-
-    let mut wtr = Writer::from_path(path)?;
-    wtr.write_record(&[
-        "First Strategy",
-        "Second Strategy",
-        "First Score",
-        "Second Score",
-    ])?;
-
-    for (first_name, second_name, GameResult(first_score, second_score)) in results {
-        wtr.write_record(&[
-            first_name,
-            second_name,
-            &first_score.to_string().as_str(),
-            &second_score.to_string().as_str(),
-        ])?;
-    }
-
-    wtr.flush()?;
-    Ok(())
 }

@@ -12,3 +12,7 @@ itertools = "0.13.0"
 rand = "0.8.5"
 rayon = "1.10.0"
 tokio = { version = "1", features = ["full"] }
+
+[dependencies.iced]
+git = "https://github.com/iced-rs/iced.git"
+rev = "cdb18e610a72b4a025d7e1890140393adee5b087"
