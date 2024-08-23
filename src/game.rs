@@ -70,6 +70,8 @@ pub fn play_strategies(first: &mut Box<dyn Strategy>, second: &mut Box<dyn Strat
 }
 
 fn eval(you: f64, other: f64) -> f64 {
+    let you = you.clamp(COOPERATE, DEFECT);
+    let other = other.clamp(COOPERATE, DEFECT);
     you - (2.0 * other) + 2.0
 }
 

@@ -1,4 +1,4 @@
-const DEFECTION_THRESHOLD: f64 = 0.5; // 0.0 is COOPERATE
+use rand::random;
 
 use crate::{GameMove, COOPERATE, DEFECT};
 
@@ -11,11 +11,13 @@ pub fn to_my_move(GameMove(my_move, _): &GameMove) -> f64 {
 }
 
 pub fn is_cooperation(m: &f64) -> bool {
-    m < &DEFECTION_THRESHOLD
+    let p = random::<f64>();
+    m < &p
 }
 
 pub fn is_defection(m: &f64) -> bool {
-    m >= &DEFECTION_THRESHOLD
+    let p = random::<f64>();
+    m >= &p
 }
 
 pub fn to_nearest_move(m: f64) -> f64 {

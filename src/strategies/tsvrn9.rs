@@ -1,47 +1,50 @@
-use std::cmp::Ordering;
-
-use float_cmp::approx_eq;
-
-use crate::{GameHistory, GameMove, Strategy, COOPERATE, DEFECT};
+use crate::{GameHistory, GameMove, Strategy, DEFECT};
 
 // These are TSVRN9's custom strategies
 pub fn all() -> Vec<(&'static str, Box<dyn Strategy>)> {
     vec![
+        ("Detente", Box::new(Detente::init(1.0, 0.1)))
     ]
 }
 
-/// This strategy keeps track of its "trust" with other strategies
-/// Trust represents how much its move decrements by. (Smaller numbers represent more cooperation)
-/// Trust will increment by a 
+/// This strategy keeps track of its "comfort" with other strategies
+/// Comfort is how much each move decrements by. (Smaller numbers represent more cooperation, so as comfort increases, the f64 returns decreases)
+/// Trust is how much comfort increments by, which is constant
+/// Defections will reset comfort and lead to the next move being a defection
+/// Cooperation will decrement Detente's previous move by comfort
+/// A move is considered cooperative if it is less than max(1 - comfort / 2, 0.1)
 #[derive(Debug, Clone)]
-struct BuildingTrust {
-    distrust: f64,
-    increment: f64,
+struct Detente {
+    comfort: f64,
+    trust: f64,
 }
 
-impl BuildingTrust {
-    pub fn init(initial_distrust: f64, relaxation_increment: f64) -> Self {
-        BuildingTrust {
-            distrust: initial_distrust,
-            increment: relaxation_increment,
+impl Detente {
+    pub fn init(intial_comfort: f64, trust: f64) -> Self {
+        Detente {
+            comfort: intial_comfort,
+            trust,
         }
     }
 }
 
-impl Strategy for BuildingTrust {
+impl Strategy for Detente {
     fn next_move(&mut self, last_move: Option<GameMove>, _: &GameHistory) -> f64 {
         if let Some(GameMove(_, previous)) = last_move {
-            const EXPECTATIONS: f64 = 0.1;
+            let is_cooperative = previous < (1.0 - (self.comfort / 2.0)).max(0.1);
 
-            let disappointment = self.distrust - previous;
+            let next_move = if is_cooperative {
+                let v = previous - self.comfort;
+                self.comfort += self.trust;
+                v
+            } else {
+                self.comfort = 0.0;
+                DEFECT
+            };
 
-            self.distrust = match disappointment.total_cmp(&EXPECTATIONS) {
-                Ordering::Greater => 0.0, // more disappointing, betrayed
-                _ if approx_eq!(f64, disappointment, 0.0, epsilon = EXPECTATIONS) => self.distrust - self.increment,
-                Ordering::Less => previous - self.increment,  // less disappointing, pleasantly surprised
-                _ => panic!("unreachable")
-            }.clamp(COOPERATE, DEFECT)
+            next_move
+        } else {
+            1.0 - self.comfort
         }
-        self.distrust
     }
 }
