@@ -3,7 +3,9 @@ use crate::{GameHistory, GameMove, Strategy, DEFECT};
 // These are TSVRN9's custom strategies
 pub fn all() -> Vec<(&'static str, Box<dyn Strategy>)> {
     vec![
-        ("Detente", Box::new(Detente::init(1.0, 0.1)))
+        ("Detente", Box::new(Detente::init(1.0, 0.1))),
+        ("Suspicious Detente", Box::new(Detente::init(0.0, 0.1))),
+        ("Trusting Detente", Box::new(Detente::init(1.0, 0.5)))
     ]
 }
 

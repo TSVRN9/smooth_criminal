@@ -122,7 +122,7 @@ fn draw_color_grid_mut(
                     y + (i as u32 * cell_size) as i32,
                 )
                 .of_size(cell_size, cell_size),
-                blend_colors(*color, WHITE, 0.2)
+                blend_colors(*color, WHITE, 0.3)
             )
         }
     }

@@ -142,6 +142,6 @@ impl Strategy for NPavlov {
         });
         self.p = self.p.clamp(0.0, 1.0);
 
-        self.p
+        1.0 - self.p
     }
 }
