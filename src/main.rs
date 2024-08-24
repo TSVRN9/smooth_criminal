@@ -41,36 +41,3 @@ pub fn main() -> iced::Result {
     // Ok(())
 }
 
-async fn run_competition(
-    strategies: Vec<(&'static str, Box<dyn Strategy>)>,
-) -> Vec<(&'static str, &'static str, GameResult)> {
-    let mut tasks = vec![];
-
-    for (first_name, first_strategy) in strategies.iter() {
-        for (second_name, second_strategy) in strategies.iter() {
-            let first_name = *first_name;
-            let second_name = *second_name;
-            let mut first_strategy = dyn_clone::clone(&*first_strategy);
-            let mut second_strategy = dyn_clone::clone(&*second_strategy);
-
-            let task = tokio::spawn(async move {
-                (
-                    first_name,
-                    second_name,
-                    play_strategies(&mut first_strategy, &mut second_strategy),
-                )
-            });
-
-            tasks.push(task);
-        }
-    }
-
-    let mut results = vec![];
-    for task in tasks {
-        if let Ok(result) = task.await {
-            results.push(result);
-        }
-    }
-
-    results
-}
