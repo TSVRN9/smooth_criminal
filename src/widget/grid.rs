@@ -83,7 +83,7 @@ impl GridCell<'_> {
         button(Space::new(Length::Fill, Length::Fill))
             .on_press(CellMessage::Focus)
             .style(|_, _| {
-                button::Appearance::default().with_background(Background::Color(Color::BLACK))
+                button::Style::default().with_background(Background::Color(Color::BLACK))
             })
             .padding(2)
             .width(20)

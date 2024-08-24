@@ -46,7 +46,7 @@ impl GameMove {
     }
 }
 
-async fn run_competition(
+pub async fn run_competition(
     strategies: Vec<(&'static str, Box<dyn Strategy>)>,
 ) -> Vec<MatchupResult> {
     let mut tasks = vec![];

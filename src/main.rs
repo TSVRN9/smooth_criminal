@@ -8,32 +8,18 @@ pub mod strategies {
     pub mod utils;
 }
 pub mod widget {
-    pub mod viewer;
+    pub mod app;
     pub mod grid;
 }
 pub mod image;
 
-use widget::grid::Grid;
+use widget::{app::ResultsInspector, grid::Grid};
 
 use crate::game::*;
-use crate::widget::viewer;
 
 pub fn main() -> iced::Result {
-    let x = 3;
-
-    let y = &x;
-
-    iced::application("Viewer", Grid::update, Grid::view)
-        
-
-    // let strategies: Vec<(&'static str, Box<dyn Strategy>)> =
-    //     vec![classic::all(), continuous::all(), tsvrn9::all()]
-    //         .into_iter()
-    //         .flatten()
-    //         .collect();
-
-    // println!("Running {} strategies...", strategies.len());
-    // let results = run_competition(strategies).await;
+    iced::application("Viewer", ResultsInspector::update, ResultsInspector::view)
+        .run_with(ResultsInspector::new)
 
     // println!("Processing results...");
 
