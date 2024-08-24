@@ -13,11 +13,18 @@ pub mod widget {
 }
 pub mod image;
 
+use widget::grid::Grid;
+
 use crate::game::*;
 use crate::widget::viewer;
 
 pub fn main() -> iced::Result {
-    iced::run("Viewer", viewer::update, viewer::view)
+    let x = 3;
+
+    let y = &x;
+
+    iced::application("Viewer", Grid::update, Grid::view)
+        
 
     // let strategies: Vec<(&'static str, Box<dyn Strategy>)> =
     //     vec![classic::all(), continuous::all(), tsvrn9::all()]
