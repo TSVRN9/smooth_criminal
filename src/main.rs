@@ -11,9 +11,8 @@ pub mod widget {
     pub mod app;
     pub mod grid;
 }
-pub mod image;
 
-use widget::{app::ResultsInspector, grid::Grid};
+use widget::app::ResultsInspector;
 
 use crate::game::*;
 

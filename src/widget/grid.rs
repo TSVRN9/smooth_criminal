@@ -1,50 +1,46 @@
-use std::{cell::Cell, default};
-
 use iced::{
-    widget::{button, column, row, Space},
+    widget::{button, column, container, row, Space},
     Background, Color, Element, Length,
 };
 
 use crate::MatchupResult;
 
 #[derive(Debug, Clone)]
-pub enum Message<'a> {
+pub enum GridMessage<'a> {
     Select(&'a MatchupResult),
 }
 
 #[derive(Default, Debug, Clone)]
-pub enum Status {
+pub enum GridStatus {
     #[default]
     Idle,
     Focused(MatchupResult),
 }
 
 #[derive(Debug, Clone)]
-pub struct Grid<'a> {
-    matchup_results: &'a Vec<MatchupResult>,
-    grid_cells: Vec<GridCell<'a>>,
-    status: Status,
+pub struct Grid {
+    grid_cells: Vec<GridCell>,
+    status: GridStatus,
 }
 
-impl Grid<'_> {
-    pub fn new<'a>(matchup_results: &'a Vec<MatchupResult>) -> Grid<'a> {
-        let grid_cells = matchup_results.iter().map(GridCell::new).collect();
+impl Grid {
+    pub fn new(matchup_results: Vec<MatchupResult>) -> Grid {
+        let grid_cells = matchup_results.into_iter().map(GridCell::new).collect();
         Grid {
-            matchup_results,
             grid_cells,
-            status: Status::Idle,
+            status: GridStatus::Idle,
         }
     }
 
-    pub fn update(&mut self, message: Message) {}
+    pub fn update(&mut self, _message: GridMessage) {}
 
-    pub fn view(&self) -> Element<Message> {
+    pub fn view(&self) -> Element<GridMessage> {
         let n = (self.grid_cells.len() as f64).sqrt() as usize;
 
         let rows = self.grid_cells.chunks(n).map(|r| {
             row(r
                 .iter()
-                .map(|e| e.view().map(|_| Message::Select(e.matchup_result))))
+                .map(|e| e.view().map(|_| GridMessage::Select(&e.matchup_result))))
             .into()
         });
 
@@ -53,9 +49,9 @@ impl Grid<'_> {
 }
 
 #[derive(Debug, Clone)]
-struct GridCell<'a> {
+struct GridCell {
     is_selected: bool,
-    matchup_result: &'a MatchupResult,
+    matchup_result: MatchupResult,
 }
 
 #[derive(Debug, Clone)]
@@ -64,8 +60,8 @@ enum CellMessage {
     Unfocus,
 }
 
-impl GridCell<'_> {
-    pub fn new<'a>(matchup_result: &'a MatchupResult) -> GridCell<'a> {
+impl GridCell {
+    pub fn new(matchup_result: MatchupResult) -> GridCell {
         GridCell {
             matchup_result,
             is_selected: false,
@@ -80,14 +76,19 @@ impl GridCell<'_> {
     }
 
     pub fn view(&self) -> Element<CellMessage> {
-        button(Space::new(Length::Fill, Length::Fill))
-            .on_press(CellMessage::Focus)
-            .style(|_, _| {
-                button::Style::default().with_background(Background::Color(Color::BLACK))
-            })
-            .padding(2)
-            .width(20)
-            .height(20)
-            .into()
+        container(
+            button(Space::new(Length::Fill, Length::Fill))
+                .on_press(CellMessage::Focus)
+                .style(|_, status| {
+                    let bg_color = match status {
+                        button::Status::Hovered => Color::from_rgb8(128, 128, 128),
+                        _ => Color::BLACK
+                    };
+
+                    button::Style::default().with_background(Background::Color(bg_color))
+                })
+                .width(20)
+                .height(20)
+        ).padding(0).into()
     }
 }

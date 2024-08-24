@@ -9,15 +9,14 @@ use crate::{
 use super::grid::Grid;
 
 #[derive(Default)]
-pub enum ResultsInspector<'a> {
+pub enum ResultsInspector {
     #[default]
     Loading,
-    Loaded(State<'a>),
+    Loaded(State),
 }
 
-pub struct State<'a> {
-    grid: Grid<'a>,
-    matchup_results: Vec<MatchupResult>,
+pub struct State {
+    grid: Grid,
 }
 
 #[derive(Debug, Clone)]
@@ -26,8 +25,8 @@ pub enum Message {
     Loaded(Vec<MatchupResult>),
 }
 
-impl<'a> ResultsInspector<'a> {
-    pub fn new() -> (ResultsInspector<'a>, Task<Message>) {
+impl ResultsInspector {
+    pub fn new() -> (ResultsInspector, Task<Message>) {
         let strategies: Vec<(&'static str, Box<dyn Strategy>)> =
             vec![classic::all(), continuous::all(), tsvrn9::all()]
                 .into_iter()
@@ -47,5 +46,14 @@ impl<'a> ResultsInspector<'a> {
         }
     }
 
-    pub fn update(&mut self, _: Message) {}
+    pub fn update(&mut self, message: Message) {
+        match message {
+            Message::None => {},
+            Message::Loaded(matchup_results) => {
+                *self = ResultsInspector::Loaded(State {
+                    grid: Grid::new(matchup_results)
+                })
+            }
+        }
+    }
 }

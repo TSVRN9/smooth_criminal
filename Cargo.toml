@@ -10,7 +10,6 @@ itertools = "0.13.0"
 rand = "0.8.5"
 rayon = "1.10.0"
 tokio = { version = "1", features = ["full"] }
+iced = { git = "https://github.com/iced-rs/iced.git", rev = "4b44079f34aa9e01977a7974e5f49ae79ff6cd90" }
+iced_futures = { features = ["tokio"], git = "https://github.com/iced-rs/iced.git", rev = "4b44079f34aa9e01977a7974e5f49ae79ff6cd90" }
 
-[dependencies.iced]
-git = "https://github.com/iced-rs/iced.git"
-rev = "4b44079f34aa9e01977a7974e5f49ae79ff6cd90"
