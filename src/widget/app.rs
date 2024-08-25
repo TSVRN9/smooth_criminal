@@ -17,6 +17,7 @@ pub enum ResultsInspector {
 
 pub struct State {
     grid: Grid,
+
 }
 
 #[derive(Debug, Clone)]
