@@ -129,7 +129,7 @@ impl Cell {
                         _ => 0.0,
                     };
 
-                    let bg_color = blend_colors(color, Color::WHITE, tint);
+                    let bg_color = crate::colors::blend_colors(color, Color::WHITE, tint);
                     button::Style::default().with_background(Background::Color(bg_color))
                 })
                 .width(20)
@@ -138,13 +138,4 @@ impl Cell {
         .padding(0)
         .into()
     }
-}
-
-fn blend_colors(first: Color, second: Color, a: f32) -> Color {
-    let x = 1.0 - a;
-    Color::from_rgb(
-        first.r * x + second.r * a,
-        first.g * x + second.g + a,
-        first.b * x + second.b * a,
-    )
 }

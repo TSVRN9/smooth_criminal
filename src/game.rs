@@ -11,10 +11,10 @@ pub const S: f64 = 0.0;
 
 #[derive(Debug, Clone)]
 pub struct MatchupResult {
-    first_name: &'static str,
-    second_name: &'static str,
-    overall_result: GameResult,
-    history: GameHistory,
+    pub first_name: &'static str,
+    pub second_name: &'static str,
+    pub overall_result: GameResult,
+    pub history: GameHistory,
 
 }
 #[derive(Debug, Clone)]

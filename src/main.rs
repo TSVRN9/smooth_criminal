@@ -1,6 +1,7 @@
 #![allow(dead_code)]
 
 pub mod game;
+pub mod colors;
 pub mod strategies {
     pub mod classic;
     pub mod continuous;
