@@ -4,7 +4,7 @@ use iced::{widget::text, Color, Element, Task};
 use rayon::prelude::*;
 
 use crate::{
-    colors::blend_colors, run_competition, strategies::{classic, continuous, tsvrn9}, MatchupResult, Strategy
+    colors::blend_colors, run_competition, strategies::{classic, continuous, tsvrn9}, GameResult, MatchupResult, Strategy
 };
 
 use super::grid::Grid;
@@ -23,6 +23,7 @@ pub struct State {
     matchup_results: Vec<MatchupResult>,
     stats: HashMap<&'static str, Stat>,
     selected_stat: &'static str,
+    colors: Vec<Color>,
     filters: Vec<StatFilter>,
 }
 
@@ -37,7 +38,6 @@ pub enum StatFilter {
     HideColumn(usize),
 }
 
-
 #[derive(Debug, Clone)]
 pub enum Message {
     Loaded(Vec<&'static str>, Vec<MatchupResult>, HashMap<&'static str, Stat>),
@@ -45,28 +45,22 @@ pub enum Message {
 
 impl ResultsInspector {
     pub fn new() -> (ResultsInspector, Task<Message>) {
-        let strategies: Vec<(&'static str, Box<dyn Strategy>)> =
-            vec![classic::all(), continuous::all(), tsvrn9::all()]
-                .into_iter()
-                .flatten()
-                .collect();
-
         (
             Self::Loading,
             Task::perform(
-                load(strategies),
-                |(strategy_names, matchup_results, statistics)| Message::Loaded(matchup_results, statistics),
+                load(),
+                |(strategy_names, matchup_results, statistics)| Message::Loaded(strategy_names, matchup_results, statistics),
             ),
         )
     }
 
     pub fn update(&mut self, message: Message) {
         match message {
-            Message::Loaded(strategy_names, matchup_results, statistics) => {
+            Message::Loaded(strategy_names, matchup_results, stats) => {
                 let n = strategy_names.len();
-                *self = ResultsInspector::Loaded(State {
+                *self = ResultsInspector::Raw(State {
                     grid: Grid::new(n, n),
-                    strategy_names, matchup_results, statistics
+                    strategy_names, matchup_results, selected_stat: *stats.iter().next().unwrap().0, stats, filters: vec![]
                 })
             }
         }
@@ -75,32 +69,42 @@ impl ResultsInspector {
     pub fn view(&self) -> Element<Message> {
         match self {
             ResultsInspector::Loading => text("Loading...").into(),
-            ResultsInspector::Loaded(state) => {
-                let (cell_colors, _label_colors) = calculate_cell_and_strategy_colors(by, results, grid_width)
-                state.grid.view().map(|_| Message::None)
+            ResultsInspector::Raw(state) => {
+                todo!();
             },
         }
     }
 }
 
-async fn load(
-    strategies: Vec<(&'static str, Box<dyn Strategy>)>,
-) -> (Vec<&'static str>, Vec<MatchupResult>, Vec<Stat>) {
+async fn load() -> (Vec<&'static str>, Vec<MatchupResult>, HashMap<&'static str, Stat>) {
+    let strategies: Vec<_> =
+        vec![classic::all(), continuous::all(), tsvrn9::all()]
+            .into_iter()
+            .flatten()
+            .collect();
+
+    let strategy_names = strategies.iter().map(|(name, _)| *name).collect();
+    let grid_width = strategies.len();
     let matchup_results = run_competition(strategies).await;
-    let n = strategies.len();
 
-    let statistics = calculate_stat()
+    let (point_difference, points_per_round) = tokio::join!(
+        calculate_stat(|MatchupResult { overall_result: GameResult(a, b), .. }| a - b, &matchup_results, grid_width),
+        calculate_stat(|MatchupResult { overall_result: GameResult(a, _), .. }| *a, &matchup_results, grid_width)
+    );
 
-    (matchup_results, statistics)
+    let mut stats = HashMap::new();
+
+    stats.insert("Point difference", point_difference);
+    stats.insert("Points per round", points_per_round);
+
+    (strategy_names, matchup_results, stats)
 }
 
-async fn calculate_stat<F>(
-    by: F,
+async fn calculate_stat(
+    by: fn(&MatchupResult) -> f64,
     results: &Vec<MatchupResult>,
     grid_width: usize,
 ) -> Stat
-where
-    F: Fn(&MatchupResult) -> f64,
 {
     let values: Vec<_> = results
         .iter()
