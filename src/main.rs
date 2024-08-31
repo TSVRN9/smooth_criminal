@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 
-pub mod game;
 pub mod colors;
+pub mod game;
 pub mod strategies {
     pub mod classic;
     pub mod continuous;
@@ -13,12 +13,18 @@ pub mod widget {
     pub mod grid;
 }
 
+use iced::{window::{Position, Settings}, Theme};
 use widget::app::ResultsInspector;
 
 use crate::game::*;
 
 pub fn main() -> iced::Result {
     iced::application("Viewer", ResultsInspector::update, ResultsInspector::view)
+        .theme(|_| Theme::Dark)
+        .window(Settings {
+            position: Position::Centered,
+            ..Default::default()
+        })
         .run_with(ResultsInspector::new)
 
     // println!("Processing results...");
@@ -33,4 +39,3 @@ pub fn main() -> iced::Result {
 
     // Ok(())
 }
-

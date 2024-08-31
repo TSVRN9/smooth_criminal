@@ -5,8 +5,8 @@ use iced::{
 
 #[derive(Debug, Clone)]
 pub enum GridMessage {
-    Focused(usize, usize),
-    Unfocused(usize, usize),
+    Focus(usize, usize),
+    Unfocus(usize, usize),
 }
 
 pub struct Grid {
@@ -29,13 +29,17 @@ impl<'a> Grid {
 
     pub fn update(&mut self, message: GridMessage) {
         match message {
-            GridMessage::Focused(x, y) => {
+            GridMessage::Focus(x, y) => {
                 let cell = self.get_cell_mut(x, y);
-                cell.update(CellMessage::Focused)
+                cell.update(CellMessage::Focus)
             }
-            GridMessage::Unfocused(x, y) => {
+            GridMessage::Unfocus(x, y) => {
                 let cell = self.get_cell_mut(x, y);
-                cell.update(CellMessage::Unfocused)
+                cell.update(CellMessage::Unfocus)
+            },
+            GridMessage::ToggleFocus(x, y) => {
+                let cell = self.get_cell_mut(x, y);
+                cell.update(CellMessage::ToggleFocus)
             }
         }
     }
@@ -46,7 +50,7 @@ impl<'a> Grid {
     }
 
     fn flatten_indicies(&self, x: usize, y: usize) -> usize {
-        y * self.width + x
+        x * self.width + y
     }
 
     pub fn view(&self, colors: &Vec<Color>) -> Element<GridMessage> {
@@ -84,10 +88,12 @@ impl<'a> Grid {
         cell: &'a Cell,
         color: Color,
     ) -> Element<GridMessage> {
-        cell.view(color, row == col).map(move |m| match m {
-            CellMessage::Focused => GridMessage::Focused(row, col),
-            CellMessage::Unfocused => GridMessage::Unfocused(row, col),
-        })
+        cell.view(color, row == col).map(move |m|
+            match m {
+                CellMessage::Focus => GridMessage::Focus(row, col),
+                CellMessage::Unfocus => GridMessage::Unfocus(row, col),
+            }
+        )
     }
 }
 
@@ -99,8 +105,9 @@ struct Cell {
 
 #[derive(Debug, Clone)]
 enum CellMessage {
-    Focused,
-    Unfocused,
+    ToggleFocus,
+    Focus,
+    Unfocus,
 }
 
 impl Cell {
@@ -113,15 +120,16 @@ impl Cell {
 
     pub fn update(&mut self, message: CellMessage) {
         self.is_selected = match message {
-            CellMessage::Focused => true,
-            CellMessage::Unfocused => false,
+            CellMessage::ToggleFocus => !self.is_selected,
+            CellMessage::Focus => true,
+            CellMessage::Unfocus => false,
         };
     }
 
     pub fn view(&self, color: Color, show_border: bool) -> Element<CellMessage> {
         container(
             button(Space::new(Length::Fill, Length::Fill))
-                .on_press(CellMessage::Focused)
+                .on_press(CellMessage::Focus)
                 .style(move |_, status| {
                     use crate::colors::blend_colors;
                     use button::{Status, Style};
@@ -135,7 +143,13 @@ impl Cell {
 
                     Style {
                         background: Some(Background::Color(bg_color)),
-                        border: if show_border {
+                        border: if self.is_selected {
+                            Border {
+                                color: blend_colors(bg_color, crate::colors::YELLOW, 0.6),
+                                width: 2.0,
+                                radius: Default::default(),
+                            }
+                        } else if show_border {
                             Border {
                                 color: blend_colors(bg_color, Color::WHITE, 0.2),
                                 width: 2.0,
@@ -147,8 +161,8 @@ impl Cell {
                         ..button::Style::default()
                     }
                 })
-                .width(20)
-                .height(20),
+                .width(30)
+                .height(30),
         )
         .padding(0)
         .into()

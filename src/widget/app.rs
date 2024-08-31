@@ -1,16 +1,20 @@
 use std::{collections::HashMap, sync::Arc};
 
-use iced::{widget::text, Color, Element, Task};
+use iced::{
+    widget::{container, text},
+    window::{get_latest, maximize},
+    Color, Element, Length, Task,
+};
 use rayon::prelude::*;
 
 use crate::{
     colors::blend_colors,
     run_competition,
     strategies::{classic, continuous, tsvrn9},
-    GameResult, MatchupResult, Strategy,
+    GameResult, MatchupResult,
 };
 
-use super::grid::{Grid, GridMessage};
+use super::grid::{self, Grid, GridMessage};
 
 #[derive(Default)]
 pub enum ResultsInspector {
@@ -26,6 +30,8 @@ pub struct State {
     selected_stat: &'static str,
     colors: Colors,
     filters: Vec<StatFilter>,
+
+    selected_cell: Option<(usize, usize)>,
 }
 
 #[derive(Debug, Clone)]
@@ -47,7 +53,6 @@ pub struct Colors {
     cell_colors: Vec<Color>,
     strategy_colors: Vec<Color>,
 }
-
 
 #[derive(Debug, Clone, Default)]
 pub struct Stat {
@@ -79,7 +84,7 @@ impl ResultsInspector {
             Message::Raw(data) => {
                 if let ResultsInspector::Loading = self {
                     *self = ResultsInspector::Raw(RawState {
-                        selected_stat: "Point difference" /* data.stats.keys().next().unwrap() */,
+                        selected_stat: "Points per round", /* data.stats.keys().next().unwrap() */
                         data,
                         filters: vec![],
                     });
@@ -104,44 +109,74 @@ impl ResultsInspector {
 
                 Task::perform(calculate_cell_and_strategy_colors(stat), Message::Loaded)
             }
-            Message::Loaded(colors) => {
-                match self {
-                    ResultsInspector::Raw(raw_state) => {
-                        let n = raw_state.data.strategy_names.len();
+            Message::Loaded(colors) => match self {
+                ResultsInspector::Raw(raw_state) => {
+                    let n = raw_state.data.strategy_names.len();
 
-                        let mut new_state = 
-                            State {
-                                grid: Grid::new(n, n),
-                                data: Default::default(),
-                                selected_stat: raw_state.selected_stat,
-                                colors,
-                                filters: Default::default(),
+                    let mut new_state = State {
+                        grid: Grid::new(n, n),
+                        data: Default::default(),
+                        selected_stat: raw_state.selected_stat,
+                        colors,
+                        filters: Default::default(),
+                        selected_cell: None,
+                    };
+
+                    std::mem::swap(&mut new_state.data, &mut raw_state.data);
+
+                    *self = ResultsInspector::Loaded(new_state);
+
+                    get_latest().then(|id| maximize(id.expect("No window found?"), true))
+                }
+                ResultsInspector::Loaded(state) => {
+                    state.colors = colors;
+                    Task::none()
+                }
+                _ => panic!("Unexpected State"),
+            },
+            _ => {
+                if let ResultsInspector::Loaded(state) = self {
+                    match message {
+                        Message::GridMessage(grid_message) => {
+                            match grid_message {
+                                GridMessage::Focus(x, y) => {
+                                    state.selected_cell = Some((x, y));
+                                }
+                                GridMessage::Unfocus(x, y) => {
+                                    if state.selected_cell == Some((x, y)) {
+                                        state.selected_cell = None;
+                                    }
+                                }
                             };
 
-                        std::mem::swap(&mut new_state.data, &mut raw_state.data);
+                            state.grid.update(grid_message);
+                            Task::none()
+                        }
 
-                        *self = ResultsInspector::Loaded(new_state);
+                        Message::Raw(_) | Message::RecalculateColor | Message::Loaded(_) => {
+                            panic!("Unreachable");
+                        }
                     }
-                    ResultsInspector::Loaded(state) => {
-                        state.colors = colors;
-                    }
-                    _ => panic!("Unexpected State")
+                } else {
+                    panic!("Invalid State");
                 }
-                Task::none()
-            }
-            Message::GridMessage(_) => {
-                todo!();
-                // Task::none()
             }
         }
     }
 
     pub fn view(&self) -> Element<Message> {
         match self {
-            ResultsInspector::Loading | ResultsInspector::Raw(_) => text("Loading...").into(),
-            ResultsInspector::Loaded(state) => {
-                state.grid.view(&state.colors.cell_colors).map(|m| Message::GridMessage(m))
+            ResultsInspector::Loading | ResultsInspector::Raw(_) => {
+                container(text("Loading...").size(24))
+                    .width(Length::Fill)
+                    .height(Length::Fill)
+                    .center(Length::Fill)
+                    .into()
             }
+            ResultsInspector::Loaded(state) => state
+                .grid
+                .view(&state.colors.cell_colors)
+                .map(|m| Message::GridMessage(m)),
         }
     }
 }
@@ -213,7 +248,10 @@ async fn calculate_cell_and_strategy_colors(stat: Arc<Stat>) -> Colors {
         calculate_colors(average, &stat.strategy_averages, Color::WHITE)
     );
 
-    Colors { cell_colors, strategy_colors }
+    Colors {
+        cell_colors,
+        strategy_colors,
+    }
 }
 
 async fn calculate_colors(standard: f64, values: &Vec<f64>, default: Color) -> Vec<Color> {

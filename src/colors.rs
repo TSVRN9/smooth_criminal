@@ -14,6 +14,13 @@ pub const BLUE: Color = Color {
     a: 1.0,
 };
 
+pub const YELLOW: Color = Color {
+    r: 0.9882352941,
+    g: 1.0,
+    b: 0.6196078431,
+    a: 1.0,
+};
+
 pub fn blend_colors(first: Color, second: Color, a: f32) -> Color {
     let x = 1.0 - a;
     Color::from_rgb(
