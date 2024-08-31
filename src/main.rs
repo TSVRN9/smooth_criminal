@@ -11,6 +11,7 @@ pub mod strategies {
 pub mod widget {
     pub mod app;
     pub mod grid;
+    pub mod labels;
 }
 
 use iced::{window::{Position, Settings}, Theme};
@@ -26,16 +27,4 @@ pub fn main() -> iced::Result {
             ..Default::default()
         })
         .run_with(ResultsInspector::new)
-
-    // println!("Processing results...");
-
-    // tokio::try_join!(
-    //     write_raw_results_to_csv("results/raw.csv", &results),
-    //     generate_performance_image("results/win_loss.png", &results, |GameResult(a, b)| a - b, 40, 20, 36.0),
-    //     generate_performance_image("results/points.png", &results, |GameResult(a, _)| *a, 40, 20, 36.0),
-    // )?;
-
-    // println!("Done!");
-
-    // Ok(())
 }

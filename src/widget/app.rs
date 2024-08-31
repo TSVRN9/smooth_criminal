@@ -1,7 +1,7 @@
 use std::{collections::HashMap, sync::Arc};
 
 use iced::{
-    widget::{container, text},
+    widget::{container, row, text},
     window::{get_latest, maximize},
     Color, Element, Length, Task,
 };
@@ -14,7 +14,7 @@ use crate::{
     GameResult, MatchupResult,
 };
 
-use super::grid::{self, Grid, GridMessage};
+use super::grid::{Grid, GridMessage};
 
 #[derive(Default)]
 pub enum ResultsInspector {
@@ -84,7 +84,7 @@ impl ResultsInspector {
             Message::Raw(data) => {
                 if let ResultsInspector::Loading = self {
                     *self = ResultsInspector::Raw(RawState {
-                        selected_stat: "Points per round", /* data.stats.keys().next().unwrap() */
+                        selected_stat: data.stats.keys().next().unwrap(),
                         data,
                         filters: vec![],
                     });
@@ -140,7 +140,14 @@ impl ResultsInspector {
                         Message::GridMessage(grid_message) => {
                             match grid_message {
                                 GridMessage::Focus(x, y) => {
+                                    let previous_cell = state.selected_cell;
                                     state.selected_cell = Some((x, y));
+
+                                    if let Some((x_previous, y_previous)) = previous_cell {
+                                        state
+                                            .grid
+                                            .update(GridMessage::Unfocus(x_previous, y_previous));
+                                    }
                                 }
                                 GridMessage::Unfocus(x, y) => {
                                     if state.selected_cell == Some((x, y)) {
@@ -166,17 +173,23 @@ impl ResultsInspector {
 
     pub fn view(&self) -> Element<Message> {
         match self {
-            ResultsInspector::Loading | ResultsInspector::Raw(_) => {
-                container(text("Loading...").size(24))
-                    .width(Length::Fill)
-                    .height(Length::Fill)
-                    .center(Length::Fill)
-                    .into()
-            }
-            ResultsInspector::Loaded(state) => state
+            ResultsInspector::Loading | ResultsInspector::Raw(_) => container(
+                text(if let ResultsInspector::Loading = self {
+                    "Running simulations..."
+                } else {
+                    "Loading..."
+                })
+                .size(24),
+            )
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .center(Length::Fill)
+            .into(),
+            ResultsInspector::Loaded(state) => row!(state
                 .grid
                 .view(&state.colors.cell_colors)
-                .map(|m| Message::GridMessage(m)),
+                .map(|m| Message::GridMessage(m)))
+            .into(),
         }
     }
 }
@@ -212,8 +225,8 @@ async fn load() -> Data {
 
     let mut stats = HashMap::new();
 
-    stats.insert("Point difference", Arc::new(point_difference));
     stats.insert("Points per round", Arc::new(points_per_round));
+    stats.insert("Point difference", Arc::new(point_difference));
 
     Data {
         strategy_names,

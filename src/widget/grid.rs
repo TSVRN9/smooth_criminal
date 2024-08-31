@@ -36,10 +36,6 @@ impl<'a> Grid {
             GridMessage::Unfocus(x, y) => {
                 let cell = self.get_cell_mut(x, y);
                 cell.update(CellMessage::Unfocus)
-            },
-            GridMessage::ToggleFocus(x, y) => {
-                let cell = self.get_cell_mut(x, y);
-                cell.update(CellMessage::ToggleFocus)
             }
         }
     }
@@ -88,12 +84,17 @@ impl<'a> Grid {
         cell: &'a Cell,
         color: Color,
     ) -> Element<GridMessage> {
-        cell.view(color, row == col).map(move |m|
-            match m {
-                CellMessage::Focus => GridMessage::Focus(row, col),
-                CellMessage::Unfocus => GridMessage::Unfocus(row, col),
+        cell.view(color, row == col).map(move |m| match m {
+            CellMessage::Focus => GridMessage::Focus(row, col),
+            CellMessage::Unfocus => GridMessage::Unfocus(row, col),
+            CellMessage::ToggleFocus => {
+                if cell.is_selected {
+                    GridMessage::Unfocus(row, col)
+                } else {
+                    GridMessage::Focus(row, col)
+                }
             }
-        )
+        })
     }
 }
 
@@ -129,7 +130,7 @@ impl Cell {
     pub fn view(&self, color: Color, show_border: bool) -> Element<CellMessage> {
         container(
             button(Space::new(Length::Fill, Length::Fill))
-                .on_press(CellMessage::Focus)
+                .on_press(CellMessage::ToggleFocus)
                 .style(move |_, status| {
                     use crate::colors::blend_colors;
                     use button::{Status, Style};
