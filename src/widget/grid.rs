@@ -10,17 +10,17 @@ pub enum GridMessage {
 }
 
 pub struct Grid {
-    width: usize,
-    height: usize,
+    num_cols: usize,
+    num_rows: usize,
     cells: Vec<Cell>,
 }
 
 impl<'a> Grid {
-    pub fn new(width: usize, height: usize) -> Grid {
+    pub fn new(num_cols: usize, num_rows: usize) -> Grid {
         Grid {
-            width,
-            height,
-            cells: (0..(width * height))
+            num_cols,
+            num_rows,
+            cells: (0..(num_cols * num_rows))
                 .into_iter()
                 .map(|i| Cell::new(i))
                 .collect(),
@@ -46,17 +46,17 @@ impl<'a> Grid {
     }
 
     fn flatten_indicies(&self, x: usize, y: usize) -> usize {
-        x * self.width + y
+        x * self.num_cols + y
     }
 
-    pub fn view(&self, colors: &Vec<Color>) -> Element<GridMessage> {
+    pub fn view(&self, colors: &Vec<Color>, cell_size: u16) -> Element<GridMessage> {
         let rows = self
             .cells
-            .chunks(self.width)
-            .zip(colors.chunks(self.width))
+            .chunks(self.num_cols)
+            .zip(colors.chunks(self.num_cols))
             .enumerate()
             .map(|(row_index, (row_cells, row_colors))| {
-                self.view_row(row_index, row_cells, row_colors)
+                self.view_row(row_index, row_cells, row_colors, cell_size)
             });
 
         column(rows).into()
@@ -67,12 +67,13 @@ impl<'a> Grid {
         row_index: usize,
         row_cells: &'a [Cell],
         row_colors: &[Color],
+        cell_size: u16,
     ) -> Element<GridMessage> {
         let cells = row_cells
             .iter()
             .zip(row_colors)
             .enumerate()
-            .map(|(col_index, (cell, &color))| self.view_cell(row_index, col_index, cell, color));
+            .map(|(col_index, (cell, &color))| self.view_cell(row_index, col_index, cell, color, cell_size));
 
         row(cells).into()
     }
@@ -83,8 +84,9 @@ impl<'a> Grid {
         col: usize,
         cell: &'a Cell,
         color: Color,
+        cell_size: u16,
     ) -> Element<GridMessage> {
-        cell.view(color, row == col).map(move |m| match m {
+        cell.view(color, row == col, cell_size).map(move |m| match m {
             CellMessage::Focus => GridMessage::Focus(row, col),
             CellMessage::Unfocus => GridMessage::Unfocus(row, col),
             CellMessage::ToggleFocus => {
@@ -127,7 +129,7 @@ impl Cell {
         };
     }
 
-    pub fn view(&self, color: Color, show_border: bool) -> Element<CellMessage> {
+    pub fn view(&self, color: Color, show_border: bool, size: u16) -> Element<CellMessage> {
         container(
             button(Space::new(Length::Fill, Length::Fill))
                 .on_press(CellMessage::ToggleFocus)
@@ -162,8 +164,8 @@ impl Cell {
                         ..button::Style::default()
                     }
                 })
-                .width(30)
-                .height(30),
+                .width(size)
+                .height(size),
         )
         .padding(0)
         .into()

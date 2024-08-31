@@ -30,6 +30,7 @@ pub struct State {
     selected_stat: &'static str,
     colors: Colors,
     filters: Vec<StatFilter>,
+    cell_size: u16,
 
     selected_cell: Option<(usize, usize)>,
 }
@@ -120,6 +121,7 @@ impl ResultsInspector {
                         colors,
                         filters: Default::default(),
                         selected_cell: None,
+                        cell_size: 30,
                     };
 
                     std::mem::swap(&mut new_state.data, &mut raw_state.data);
@@ -187,7 +189,7 @@ impl ResultsInspector {
             .into(),
             ResultsInspector::Loaded(state) => row!(state
                 .grid
-                .view(&state.colors.cell_colors)
+                .view(&state.colors.cell_colors, state.cell_size)
                 .map(|m| Message::GridMessage(m)))
             .into(),
         }
