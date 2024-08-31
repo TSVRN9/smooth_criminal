@@ -1,6 +1,7 @@
 use std::collections::HashSet;
 
 use iced::widget::*;
+use iced::Alignment;
 use iced::Color;
 use iced::Element;
 
@@ -16,12 +17,17 @@ pub struct LabelList {
 }
 
 impl LabelList {
+    const SPACING: u16 = 4;
+
     pub fn new() -> LabelList {
         Default::default()
     }
 
-    pub fn update(&mut self, _message: LabelListMessage) {
-        todo!()
+    pub fn update(&mut self, message: LabelListMessage) {
+        match message {
+            LabelListMessage::Focus(index) => self.selected_indicies.insert(index),
+            LabelListMessage::Unfocus(index) => self.selected_indicies.remove(&index),
+        };
     }
 
     pub fn view(
@@ -36,7 +42,10 @@ impl LabelList {
             .enumerate()
             .map(|(index, (&label, &color))| self.view_label(index, label, color, cell_size));
 
-        row(contents).into()
+        column(contents)
+            .align_x(Alignment::End)
+            .spacing(Self::SPACING)
+            .into()
     }
 
     fn view_label(
@@ -46,10 +55,8 @@ impl LabelList {
         color: Color,
         cell_size: u16,
     ) -> Element<LabelListMessage> {
-        use text::Style;
-
         let is_selected = self.selected_indicies.contains(&index);
-        let on_press_mesage = if is_selected {
+        let on_press_message = if is_selected {
             LabelListMessage::Unfocus(index)
         } else {
             LabelListMessage::Focus(index)
@@ -57,10 +64,17 @@ impl LabelList {
 
         button(
             text(label)
-                .style(move |_| Style { color: Some(color) })
-                .size(cell_size),
+                .style(move |_| text::Style { color: Some(color) })
+                .size(cell_size - Self::SPACING * 2)
+                .height(cell_size - Self::SPACING)
+                .align_y(Alignment::Center),
         )
-        .on_press(on_press_mesage)
+        .style(|_, _| button::Style {
+            background: None,
+            ..Default::default()
+        })
+        .padding(0)
+        .on_press(on_press_message)
         .into()
     }
 }

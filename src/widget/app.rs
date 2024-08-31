@@ -14,7 +14,10 @@ use crate::{
     GameResult, MatchupResult,
 };
 
-use super::grid::{Grid, GridMessage};
+use super::{
+    grid::{Grid, GridMessage},
+    labels::{LabelList, LabelListMessage},
+};
 
 #[derive(Default)]
 pub enum ResultsInspector {
@@ -25,12 +28,15 @@ pub enum ResultsInspector {
 }
 
 pub struct State {
-    grid: Grid,
     data: Data,
+
     selected_stat: &'static str,
-    colors: Colors,
     filters: Vec<StatFilter>,
+    colors: Colors,
     cell_size: u16,
+
+    grid: Grid,
+    label_list: LabelList,
 
     selected_cell: Option<(usize, usize)>,
 }
@@ -73,6 +79,7 @@ pub enum Message {
     RecalculateColor,
     Loaded(Colors),
     GridMessage(GridMessage),
+    LabelListMessage(LabelListMessage),
 }
 
 impl ResultsInspector {
@@ -81,6 +88,21 @@ impl ResultsInspector {
     }
 
     pub fn update(&mut self, message: Message) -> Task<Message> {
+        match message {
+            Message::Raw(_) | Message::RecalculateColor | Message::Loaded(_) => {
+                self.update_transition_states(message)
+            }
+            _ => {
+                if let ResultsInspector::Loaded(state) = self {
+                    Self::update_loaded_state(state, message)
+                } else {
+                    panic!("Invalid State");
+                }
+            }
+        }
+    }
+
+    fn update_transition_states(&mut self, message: Message) -> Task<Message> {
         match message {
             Message::Raw(data) => {
                 if let ResultsInspector::Loading = self {
@@ -115,13 +137,14 @@ impl ResultsInspector {
                     let n = raw_state.data.strategy_names.len();
 
                     let mut new_state = State {
-                        grid: Grid::new(n, n),
-                        data: Default::default(),
                         selected_stat: raw_state.selected_stat,
                         colors,
-                        filters: Default::default(),
-                        selected_cell: None,
                         cell_size: 30,
+                        grid: Grid::new(n, n),
+                        label_list: Default::default(),
+                        data: Default::default(),
+                        filters: Default::default(),
+                        selected_cell: Default::default(),
                     };
 
                     std::mem::swap(&mut new_state.data, &mut raw_state.data);
@@ -136,39 +159,40 @@ impl ResultsInspector {
                 }
                 _ => panic!("Unexpected State"),
             },
-            _ => {
-                if let ResultsInspector::Loaded(state) = self {
-                    match message {
-                        Message::GridMessage(grid_message) => {
-                            match grid_message {
-                                GridMessage::Focus(x, y) => {
-                                    let previous_cell = state.selected_cell;
-                                    state.selected_cell = Some((x, y));
+            _ => panic!("Not a transitional state"),
+        }
+    }
 
-                                    if let Some((x_previous, y_previous)) = previous_cell {
-                                        state
-                                            .grid
-                                            .update(GridMessage::Unfocus(x_previous, y_previous));
-                                    }
-                                }
-                                GridMessage::Unfocus(x, y) => {
-                                    if state.selected_cell == Some((x, y)) {
-                                        state.selected_cell = None;
-                                    }
-                                }
-                            };
+    fn update_loaded_state(state: &mut State, message: Message) -> Task<Message> {
+        match message {
+            Message::GridMessage(grid_message) => {
+                match grid_message {
+                    GridMessage::Focus(x, y) => {
+                        let previous_cell = state.selected_cell;
+                        state.selected_cell = Some((x, y));
 
-                            state.grid.update(grid_message);
-                            Task::none()
-                        }
-
-                        Message::Raw(_) | Message::RecalculateColor | Message::Loaded(_) => {
-                            panic!("Unreachable");
+                        if let Some((x_previous, y_previous)) = previous_cell {
+                            state
+                                .grid
+                                .update(GridMessage::Unfocus(x_previous, y_previous));
                         }
                     }
-                } else {
-                    panic!("Invalid State");
-                }
+                    GridMessage::Unfocus(x, y) => {
+                        if state.selected_cell == Some((x, y)) {
+                            state.selected_cell = None;
+                        }
+                    }
+                };
+
+                state.grid.update(grid_message);
+                Task::none()
+            }
+            Message::LabelListMessage(label_list_message) => match label_list_message {
+                LabelListMessage::Focus(_) => todo!(),
+                LabelListMessage::Unfocus(_) => todo!(),
+            },
+            Message::Raw(_) | Message::RecalculateColor | Message::Loaded(_) => {
+                panic!("Not a stable state");
             }
         }
     }
@@ -187,12 +211,26 @@ impl ResultsInspector {
             .height(Length::Fill)
             .center(Length::Fill)
             .into(),
-            ResultsInspector::Loaded(state) => row!(state
+            ResultsInspector::Loaded(state) => Self::view_loaded(state),
+        }
+    }
+
+    fn view_loaded(state: &State) -> Element<Message> {
+        row!(
+            state
+                .label_list
+                .view(
+                    &state.data.strategy_names,
+                    &state.colors.strategy_colors,
+                    state.cell_size
+                )
+                .map(Message::LabelListMessage),
+            state
                 .grid
                 .view(&state.colors.cell_colors, state.cell_size)
-                .map(|m| Message::GridMessage(m)))
-            .into(),
-        }
+                .map(Message::GridMessage)
+        )
+        .into()
     }
 }
 
