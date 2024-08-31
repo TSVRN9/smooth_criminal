@@ -10,6 +10,14 @@ pub const T: f64 = 3.0;
 pub const S: f64 = 0.0;
 
 #[derive(Debug, Clone)]
+pub struct MatchupResult {
+    pub first_name: &'static str,
+    pub second_name: &'static str,
+    pub overall_result: GameResult,
+    pub history: GameHistory,
+
+}
+#[derive(Debug, Clone)]
 pub struct GameResult(pub f64, pub f64);
 #[derive(Debug, Clone)]
 pub struct GameMove(pub f64, pub f64);
@@ -38,11 +46,46 @@ impl GameMove {
     }
 }
 
-pub fn play_round(x: f64, y: f64) -> GameResult {
-    return GameResult(eval(x, y), eval(y, x));
+pub async fn run_competition(
+    strategies: Vec<(&'static str, Box<dyn Strategy>)>,
+) -> Vec<MatchupResult> {
+    let mut tasks = vec![];
+
+    for (first_name, first_strategy) in strategies.iter() {
+        for (second_name, second_strategy) in strategies.iter() {
+            let first_name = *first_name;
+            let second_name = *second_name;
+            let mut first_strategy = dyn_clone::clone(&*first_strategy);
+            let mut second_strategy = dyn_clone::clone(&*second_strategy);
+
+            let task = tokio::spawn(async move {
+                (
+                    first_name,
+                    second_name,
+                    play_strategies(&mut first_strategy, &mut second_strategy),
+                )
+            });
+
+            tasks.push(task);
+        }
+    }
+
+    let mut results = vec![];
+    for task in tasks {
+        if let Ok(result) = task.await {
+            results.push(MatchupResult {
+                first_name: result.0,
+                second_name: result.1,
+                overall_result: result.2.0,
+                history: result.2.1,
+            });
+        }
+    }
+
+    results
 }
 
-pub fn play_strategies(first: &mut Box<dyn Strategy>, second: &mut Box<dyn Strategy>) -> GameResult {
+pub fn play_strategies(first: &mut Box<dyn Strategy>, second: &mut Box<dyn Strategy>) -> (GameResult, GameHistory) {
     let mut results: GameResult = GameResult(0.0, 0.0);
 
     let mut history = vec![];
@@ -57,8 +100,8 @@ pub fn play_strategies(first: &mut Box<dyn Strategy>, second: &mut Box<dyn Strat
         let x = first.next_move(last_move.clone(), &history);
         let y = second.next_move(last_move.map(|m| m.switch_perspectives()), &alt_history);
 
-        let chosen_move = GameMove(x, y);
         let result = play_round(x, y);
+        let chosen_move = GameMove(x, y);
 
         results = GameResult(results.0 + result.0, results.1 + result.1);
 
@@ -66,7 +109,11 @@ pub fn play_strategies(first: &mut Box<dyn Strategy>, second: &mut Box<dyn Strat
         last_move = Some(chosen_move);
     }
 
-    return results;
+    return (results, history);
+}
+
+pub fn play_round(x: f64, y: f64) -> GameResult {
+    return GameResult(eval(x, y), eval(y, x));
 }
 
 fn eval(you: f64, other: f64) -> f64 {
