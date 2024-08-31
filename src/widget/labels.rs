@@ -45,6 +45,7 @@ impl LabelList {
         column(contents)
             .align_x(Alignment::End)
             .spacing(Self::SPACING)
+            .padding(Self::SPACING)
             .into()
     }
 
@@ -64,14 +65,23 @@ impl LabelList {
 
         button(
             text(label)
-                .style(move |_| text::Style { color: Some(color) })
                 .size(cell_size - Self::SPACING * 2)
                 .height(cell_size - Self::SPACING)
                 .align_y(Alignment::Center),
         )
-        .style(|_, _| button::Style {
-            background: None,
-            ..Default::default()
+        .style(move |_, status| {
+            use button::{Status, Style};
+
+            let tint = match status {
+                    Status::Pressed | Status::Hovered => 0.5, 
+                    Status::Active | Status::Disabled => 0.0,
+                };
+            
+            Style {
+                background: None,
+                text_color: crate::colors::blend_colors(color, Color::WHITE, tint),
+                ..Default::default()
+            }
         })
         .padding(0)
         .on_press(on_press_message)

@@ -230,6 +230,8 @@ impl ResultsInspector {
                 .view(&state.colors.cell_colors, state.cell_size)
                 .map(Message::GridMessage)
         )
+        .spacing(6)
+        .padding(4)
         .into()
     }
 }
@@ -298,7 +300,7 @@ async fn calculate_cell_and_strategy_colors(stat: Arc<Stat>) -> Colors {
 
     let (cell_colors, strategy_colors) = tokio::join!(
         calculate_colors(average, &stat.values, Color::BLACK),
-        calculate_colors(average, &stat.strategy_averages, Color::WHITE)
+        calculate_colors(average, &stat.strategy_averages, crate::colors::LIGHT_GRAY)
     );
 
     Colors {

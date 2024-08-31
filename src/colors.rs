@@ -21,6 +21,13 @@ pub const YELLOW: Color = Color {
     a: 1.0,
 };
 
+pub const LIGHT_GRAY: Color = Color {
+    r: 0.75,
+    g: 0.75,
+    b: 0.75,
+    a: 1.0,
+};
+
 pub fn blend_colors(first: Color, second: Color, a: f32) -> Color {
     let x = 1.0 - a;
     Color::from_rgb(

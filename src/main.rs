@@ -11,17 +11,29 @@ pub mod strategies {
 pub mod widget {
     pub mod app;
     pub mod grid;
+    pub mod inspectors;
     pub mod labels;
 }
 
-use iced::{window::{Position, Settings}, Theme};
+use std::sync::Arc;
+
+use iced::{
+    theme::{Custom, Palette},
+    window::{Position, Settings},
+    Color, Theme,
+};
 use widget::app::ResultsInspector;
 
 use crate::game::*;
 
 pub fn main() -> iced::Result {
+    let palette = Palette {
+        background: Color::BLACK,
+        ..Palette::DARK
+    };
+
     iced::application("Viewer", ResultsInspector::update, ResultsInspector::view)
-        .theme(|_| Theme::Dark)
+        .theme(move |_| Theme::Custom(Arc::new(Custom::new(String::from("Viewer Theme"), palette))))
         .window(Settings {
             position: Position::Centered,
             ..Default::default()
