@@ -1,10 +1,11 @@
-use std::{collections::HashMap, sync::Arc};
+use std::sync::Arc;
 
 use iced::{
-    widget::{container, row, text, Space},
+    widget::{button, column, container, row, text, Space},
     window::{get_latest, maximize},
-    Color, Element, Length, Task,
+    Alignment, Color, Element, Length, Task,
 };
+use indexmap::IndexMap;
 use rayon::prelude::*;
 
 use crate::{
@@ -54,7 +55,7 @@ pub struct RawState {
 pub struct Data {
     strategy_names: Vec<&'static str>,
     matchup_results: Vec<MatchupResult>,
-    stats: HashMap<&'static str, Arc<Stat>>,
+    stats: IndexMap<&'static str, Arc<Stat>>,
 }
 
 #[derive(Debug, Clone)]
@@ -83,6 +84,7 @@ pub enum Message {
     GridMessage(GridMessage),
     LabelListMessage(LabelListMessage),
     MatchInspectorMessage(MatchInspectorMessage),
+    CycleSelectedStat,
 }
 
 impl ResultsInspector {
@@ -95,13 +97,10 @@ impl ResultsInspector {
             Message::Raw(_) | Message::RecalculateColor | Message::Loaded(_) => {
                 self.update_transition_states(message)
             }
-            _ => {
-                if let ResultsInspector::Loaded(state) = self {
-                    Self::update_loaded_state(state, message)
-                } else {
-                    panic!("Invalid State");
-                }
-            }
+            _ => match &self {
+                Self::Loaded(_) => self.update_loaded_state(message),
+                _ => panic!("Invalid State"),
+            },
         }
     }
 
@@ -167,41 +166,52 @@ impl ResultsInspector {
         }
     }
 
-    fn update_loaded_state(state: &mut State, message: Message) -> Task<Message> {
-        match message {
-            Message::GridMessage(grid_message) => {
-                match grid_message {
-                    GridMessage::Focus(x, y) => {
-                        let previous_cell = state.selected_cell;
-                        state.selected_cell = Some((x, y));
+    fn update_loaded_state(&mut self, message: Message) -> Task<Message> {
+        match self {
+            Self::Loaded(state) => match message {
+                Message::Raw(_) | Message::RecalculateColor | Message::Loaded(_) => {
+                    panic!("Not a loaded state");
+                }
+                Message::GridMessage(grid_message) => {
+                    match grid_message {
+                        GridMessage::Focus(x, y) => {
+                            let previous_cell = state.selected_cell;
+                            state.selected_cell = Some((x, y));
 
-                        if let Some((x_previous, y_previous)) = previous_cell {
-                            state
-                                .grid
-                                .update(GridMessage::Unfocus(x_previous, y_previous));
+                            if let Some((x_previous, y_previous)) = previous_cell {
+                                state
+                                    .grid
+                                    .update(GridMessage::Unfocus(x_previous, y_previous));
+                            }
                         }
-                    }
-                    GridMessage::Unfocus(x, y) => {
-                        if state.selected_cell == Some((x, y)) {
-                            state.selected_cell = None;
+                        GridMessage::Unfocus(x, y) => {
+                            if state.selected_cell == Some((x, y)) {
+                                state.selected_cell = None;
+                            }
                         }
-                    }
-                };
+                    };
 
-                state.grid.update(grid_message);
-                Task::none()
+                    state.grid.update(grid_message);
+                    Task::none()
+                }
+                Message::LabelListMessage(label_list_message) => match label_list_message {
+                    LabelListMessage::Focus(_) => Task::none(), // maybe implement functionality eventually
+                    LabelListMessage::Unfocus(_) => Task::none(),
+                },
+                Message::MatchInspectorMessage(message) => {
+                    state.match_inspector.update(message);
+                    Task::none()
+                }
+                Message::CycleSelectedStat => {
+                    let stats = &state.data.stats;
+
+                    let index = stats.get_index_of(state.selected_stat).unwrap();
+                    state.selected_stat = stats.get_index((index + 1) % stats.len()).unwrap().0;
+
+                    self.update(Message::RecalculateColor)
+                }
             }
-            Message::LabelListMessage(label_list_message) => match label_list_message {
-                LabelListMessage::Focus(_) => todo!(),
-                LabelListMessage::Unfocus(_) => todo!(),
-            }
-            Message::MatchInspectorMessage(message) => { 
-                state.match_inspector.update(message);
-                Task::none()
-            }
-            Message::Raw(_) | Message::RecalculateColor | Message::Loaded(_) => {
-                panic!("Not a stable state");
-            }
+            _ => panic!("Invalid state")
         }
     }
 
@@ -224,6 +234,30 @@ impl ResultsInspector {
     }
 
     fn view_loaded(state: &State) -> Element<Message> {
+        let title = button(
+            text(state.selected_stat)
+                .size(36)
+                .center()
+                .width(Length::Fill),
+        )
+        .style(|_, status| {
+            use crate::colors::blend_colors;
+            use button::{Status, Style};
+
+            let a = match status {
+                Status::Hovered | Status::Pressed => 0.2,
+                _ => 0.0,
+            };
+
+            Style {
+                background: None,
+                text_color: blend_colors(Color::WHITE, Color::BLACK, a),
+                ..Default::default()
+            }
+        })
+        .width(Length::Fill)
+        .on_press(Message::CycleSelectedStat);
+
         let inspector = match state.selected_cell {
             Some((x, y)) => {
                 let n = state.data.strategy_names.len();
@@ -239,7 +273,7 @@ impl ResultsInspector {
             None => Space::new(0, 0).into(),
         };
 
-        row!(
+        let content = row!(
             state
                 .label_list
                 .view(
@@ -255,9 +289,15 @@ impl ResultsInspector {
                 .map(Message::GridMessage),
             inspector
         )
+        .height(Length::Fill)
+        .align_y(Alignment::Center)
         .spacing(6)
-        .padding(4)
-        .into()
+        .padding(4);
+
+        column!(title, content)
+            .align_x(Alignment::Center)
+            .padding(4)
+            .into()
     }
 }
 
@@ -290,7 +330,7 @@ async fn load() -> Data {
         )
     );
 
-    let mut stats = HashMap::new();
+    let mut stats = IndexMap::new();
 
     stats.insert("Points per round", Arc::new(points_per_round));
     stats.insert("Point difference", Arc::new(point_difference));

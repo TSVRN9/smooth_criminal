@@ -1,5 +1,4 @@
 use iced::widget::column;
-use iced::widget::container;
 use iced::widget::scrollable;
 use iced::widget::text;
 use iced::Alignment;
@@ -31,7 +30,7 @@ impl Default for MatchInspector {
 
 impl MatchInspector {
     pub fn update(&mut self, _message: MatchInspectorMessage) {
-        todo!()
+        // could be left blank tbh
     }
 
     pub fn view(
@@ -53,29 +52,26 @@ impl MatchInspector {
             .map(Self::calculate_move_color)
             .collect();
 
-        let title = text!(
-            "{} - {:.2}\nvs\n{:.2} - {}",
-            first_name,
-            overall_result.0,
-            overall_result.1,
-            second_name
+        let title = column!(
+            text!("{} - {:.2}", first_name, overall_result.0,).size(36),
+            text!("vs").size(18),
+            text!("{} - {:.2}", second_name, overall_result.1,).size(36)
         )
-        .align_x(Alignment::Center)
-        .align_y(Alignment::Center)
-        .size(25);
-        let visualization = container(
+        .align_x(Alignment::Center);
+
+        let visualization = column!(
             self.grid
                 .view(&colors, cell_size)
-                .map(MatchInspectorMessage::GridMessage),
-        )
-        .center(Length::Fill)
-        .width(Length::Fill);
+                .map(MatchInspectorMessage::GridMessage)
+        ,)
+        .width(Length::Fill)
+        .align_x(Alignment::Center);
 
         let content = column!(title, scrollable(visualization).width(Length::Fill))
             .align_x(Alignment::Center)
             .width(Length::Fill);
 
-        content.into()
+        content.padding(4).into()
     }
 
     fn calculate_move_color(mv: f64) -> Color {

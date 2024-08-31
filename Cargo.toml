@@ -1,6 +1,6 @@
 [package]
 name = "smooth_criminal"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 
 [dependencies]
@@ -12,4 +12,5 @@ rayon = "1.10.0"
 tokio = { version = "1", features = ["full"] }
 iced = { features = ["advanced"], git = "https://github.com/iced-rs/iced.git", rev = "4b44079f34aa9e01977a7974e5f49ae79ff6cd90" }
 iced_futures = { features = ["tokio"], git = "https://github.com/iced-rs/iced.git", rev = "4b44079f34aa9e01977a7974e5f49ae79ff6cd90" }
+indexmap = "2.5.0"
 
