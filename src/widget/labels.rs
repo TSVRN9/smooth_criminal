@@ -35,6 +35,7 @@ impl LabelList {
         labels: &Vec<&'static str>,
         label_colors: &Vec<Color>,
         cell_size: u16,
+        align_x: Alignment,
     ) -> Element<LabelListMessage> {
         let contents = labels
             .iter()
@@ -43,7 +44,7 @@ impl LabelList {
             .map(|(index, (&label, &color))| self.view_label(index, label, color, cell_size));
 
         column(contents)
-            .align_x(Alignment::End)
+            .align_x(align_x)
             .spacing(Self::SPACING)
             .padding(Self::SPACING)
             .into()

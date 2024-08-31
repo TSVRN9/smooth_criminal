@@ -1,7 +1,7 @@
 use std::{collections::HashMap, sync::Arc};
 
 use iced::{
-    widget::{container, row, text},
+    widget::{container, row, text, Space},
     window::{get_latest, maximize},
     Color, Element, Length, Task,
 };
@@ -16,6 +16,7 @@ use crate::{
 
 use super::{
     grid::{Grid, GridMessage},
+    inspectors::{MatchInspector, MatchInspectorMessage},
     labels::{LabelList, LabelListMessage},
 };
 
@@ -39,6 +40,7 @@ pub struct State {
     label_list: LabelList,
 
     selected_cell: Option<(usize, usize)>,
+    match_inspector: MatchInspector,
 }
 
 #[derive(Debug, Clone)]
@@ -80,6 +82,7 @@ pub enum Message {
     Loaded(Colors),
     GridMessage(GridMessage),
     LabelListMessage(LabelListMessage),
+    MatchInspectorMessage(MatchInspectorMessage),
 }
 
 impl ResultsInspector {
@@ -140,11 +143,12 @@ impl ResultsInspector {
                         selected_stat: raw_state.selected_stat,
                         colors,
                         cell_size: 30,
-                        grid: Grid::new(n, n),
+                        grid: Grid::new(n, n, true),
                         label_list: Default::default(),
                         data: Default::default(),
                         filters: Default::default(),
                         selected_cell: Default::default(),
+                        match_inspector: Default::default(),
                     };
 
                     std::mem::swap(&mut new_state.data, &mut raw_state.data);
@@ -190,7 +194,11 @@ impl ResultsInspector {
             Message::LabelListMessage(label_list_message) => match label_list_message {
                 LabelListMessage::Focus(_) => todo!(),
                 LabelListMessage::Unfocus(_) => todo!(),
-            },
+            }
+            Message::MatchInspectorMessage(message) => { 
+                state.match_inspector.update(message);
+                Task::none()
+            }
             Message::Raw(_) | Message::RecalculateColor | Message::Loaded(_) => {
                 panic!("Not a stable state");
             }
@@ -216,19 +224,36 @@ impl ResultsInspector {
     }
 
     fn view_loaded(state: &State) -> Element<Message> {
+        let inspector = match state.selected_cell {
+            Some((x, y)) => {
+                let n = state.data.strategy_names.len();
+                state
+                    .match_inspector
+                    .view(
+                        state.data.matchup_results.get(x * n + y).unwrap(),
+                        None,
+                        state.cell_size,
+                    )
+                    .map(Message::MatchInspectorMessage)
+            }
+            None => Space::new(0, 0).into(),
+        };
+
         row!(
             state
                 .label_list
                 .view(
                     &state.data.strategy_names,
                     &state.colors.strategy_colors,
-                    state.cell_size
+                    state.cell_size,
+                    iced::Alignment::End
                 )
                 .map(Message::LabelListMessage),
             state
                 .grid
                 .view(&state.colors.cell_colors, state.cell_size)
-                .map(Message::GridMessage)
+                .map(Message::GridMessage),
+            inspector
         )
         .spacing(6)
         .padding(4)

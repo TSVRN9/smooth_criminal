@@ -12,14 +12,16 @@ pub enum GridMessage {
 pub struct Grid {
     num_cols: usize,
     num_rows: usize,
+    mark_diagonals: bool,
     cells: Vec<Cell>,
 }
 
 impl<'a> Grid {
-    pub fn new(num_cols: usize, num_rows: usize) -> Grid {
+    pub fn new(num_cols: usize, num_rows: usize, mark_diagonals: bool) -> Grid {
         Grid {
             num_cols,
             num_rows,
+            mark_diagonals,
             cells: (0..(num_cols * num_rows))
                 .into_iter()
                 .map(|i| Cell::new(i))
@@ -86,7 +88,7 @@ impl<'a> Grid {
         color: Color,
         cell_size: u16,
     ) -> Element<GridMessage> {
-        cell.view(color, row == col, cell_size).map(move |m| match m {
+        cell.view(color, self.mark_diagonals && row == col, cell_size).map(move |m| match m {
             CellMessage::Focus => GridMessage::Focus(row, col),
             CellMessage::Unfocus => GridMessage::Unfocus(row, col),
             CellMessage::ToggleFocus => {
