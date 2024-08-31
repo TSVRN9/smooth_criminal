@@ -1,6 +1,6 @@
 use iced::{
     widget::{button, column, container, row, Space},
-    Background, Color, Element, Length,
+    Background, Border, Color, Element, Length,
 };
 
 #[derive(Debug, Clone)]
@@ -84,7 +84,7 @@ impl<'a> Grid {
         cell: &'a Cell,
         color: Color,
     ) -> Element<GridMessage> {
-        cell.view(color).map(move |m| match m {
+        cell.view(color, row == col).map(move |m| match m {
             CellMessage::Focused => GridMessage::Focused(row, col),
             CellMessage::Unfocused => GridMessage::Unfocused(row, col),
         })
@@ -118,19 +118,34 @@ impl Cell {
         };
     }
 
-    pub fn view(&self, color: Color) -> Element<CellMessage> {
+    pub fn view(&self, color: Color, show_border: bool) -> Element<CellMessage> {
         container(
             button(Space::new(Length::Fill, Length::Fill))
                 .on_press(CellMessage::Focused)
                 .style(move |_, status| {
-                    use button::Status;
+                    use crate::colors::blend_colors;
+                    use button::{Status, Style};
+
                     let tint = match status {
                         Status::Hovered | Status::Pressed => 0.2,
                         _ => 0.0,
                     };
 
-                    let bg_color = crate::colors::blend_colors(color, Color::WHITE, tint);
-                    button::Style::default().with_background(Background::Color(bg_color))
+                    let bg_color = blend_colors(color, Color::WHITE, tint);
+
+                    Style {
+                        background: Some(Background::Color(bg_color)),
+                        border: if show_border {
+                            Border {
+                                color: blend_colors(bg_color, Color::WHITE, 0.2),
+                                width: 2.0,
+                                radius: Default::default(),
+                            }
+                        } else {
+                            Default::default()
+                        },
+                        ..button::Style::default()
+                    }
                 })
                 .width(20)
                 .height(20),

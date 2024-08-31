@@ -18,7 +18,7 @@ pub fn blend_colors(first: Color, second: Color, a: f32) -> Color {
     let x = 1.0 - a;
     Color::from_rgb(
         first.r * x + second.r * a,
-        first.g * x + second.g + a,
+        first.g * x + second.g * a,
         first.b * x + second.b * a,
     )
 }

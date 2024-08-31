@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
 
 use iced::{widget::text, Color, Element, Task};
 use rayon::prelude::*;
@@ -10,7 +10,7 @@ use crate::{
     GameResult, MatchupResult, Strategy,
 };
 
-use super::grid::Grid;
+use super::grid::{Grid, GridMessage};
 
 #[derive(Default)]
 pub enum ResultsInspector {
@@ -35,11 +35,11 @@ pub struct RawState {
     filters: Vec<StatFilter>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct Data {
     strategy_names: Vec<&'static str>,
     matchup_results: Vec<MatchupResult>,
-    stats: HashMap<&'static str, Stat>,
+    stats: HashMap<&'static str, Arc<Stat>>,
 }
 
 #[derive(Debug, Clone)]
@@ -49,7 +49,7 @@ pub struct Colors {
 }
 
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct Stat {
     values: Vec<f64>,
     strategy_averages: Vec<f64>,
@@ -66,6 +66,7 @@ pub enum Message {
     Raw(Data),
     RecalculateColor,
     Loaded(Colors),
+    GridMessage(GridMessage),
 }
 
 impl ResultsInspector {
@@ -78,7 +79,7 @@ impl ResultsInspector {
             Message::Raw(data) => {
                 if let ResultsInspector::Loading = self {
                     *self = ResultsInspector::Raw(RawState {
-                        selected_stat: data.stats.keys().next().unwrap(),
+                        selected_stat: "Point difference" /* data.stats.keys().next().unwrap() */,
                         data,
                         filters: vec![],
                     });
@@ -92,11 +93,11 @@ impl ResultsInspector {
                 let stat = match self {
                     ResultsInspector::Loaded(state) => {
                         let selected_stat = state.selected_stat;
-                        &state.data.stats[selected_stat]
+                        Arc::clone(&state.data.stats[selected_stat])
                     }
                     ResultsInspector::Raw(raw_state) => {
                         let selected_stat = raw_state.selected_stat;
-                        &raw_state.data.stats[selected_stat]
+                        Arc::clone(&raw_state.data.stats[selected_stat])
                     }
                     _ => panic!("Unexpected state"),
                 };
@@ -104,10 +105,33 @@ impl ResultsInspector {
                 Task::perform(calculate_cell_and_strategy_colors(stat), Message::Loaded)
             }
             Message::Loaded(colors) => {
-                if let ResultsInspector::Loaded(state) = self {
-                    state.colors = colors;
+                match self {
+                    ResultsInspector::Raw(raw_state) => {
+                        let n = raw_state.data.strategy_names.len();
+
+                        let mut new_state = 
+                            State {
+                                grid: Grid::new(n, n),
+                                data: Default::default(),
+                                selected_stat: raw_state.selected_stat,
+                                colors,
+                                filters: Default::default(),
+                            };
+
+                        std::mem::swap(&mut new_state.data, &mut raw_state.data);
+
+                        *self = ResultsInspector::Loaded(new_state);
+                    }
+                    ResultsInspector::Loaded(state) => {
+                        state.colors = colors;
+                    }
+                    _ => panic!("Unexpected State")
                 }
                 Task::none()
+            }
+            Message::GridMessage(_) => {
+                todo!();
+                // Task::none()
             }
         }
     }
@@ -116,7 +140,7 @@ impl ResultsInspector {
         match self {
             ResultsInspector::Loading | ResultsInspector::Raw(_) => text("Loading...").into(),
             ResultsInspector::Loaded(state) => {
-                todo!();
+                state.grid.view(&state.colors.cell_colors).map(|m| Message::GridMessage(m))
             }
         }
     }
@@ -153,8 +177,8 @@ async fn load() -> Data {
 
     let mut stats = HashMap::new();
 
-    stats.insert("Point difference", point_difference);
-    stats.insert("Points per round", points_per_round);
+    stats.insert("Point difference", Arc::new(point_difference));
+    stats.insert("Points per round", Arc::new(points_per_round));
 
     Data {
         strategy_names,
@@ -181,8 +205,8 @@ async fn calculate_stat(
     }
 }
 
-async fn calculate_cell_and_strategy_colors(stat: &Stat) -> Colors {
-    let average = stat.strategy_averages.iter().sum::<f64>() / stat.values.len() as f64;
+async fn calculate_cell_and_strategy_colors(stat: Arc<Stat>) -> Colors {
+    let average = stat.strategy_averages.iter().sum::<f64>() / stat.strategy_averages.len() as f64;
 
     let (cell_colors, strategy_colors) = tokio::join!(
         calculate_colors(average, &stat.values, Color::BLACK),
