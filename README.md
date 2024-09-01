@@ -2,6 +2,8 @@
 This is an implementation of [Nicky Case's Smooth Criminal](https://blog.ncase.me/backlog/#project_7). 
 These are the point values for decisions each strategy can make. Each strategy plays every other strategy for 2000 rounds.
 
+DISCLAIMER: Some implementations are probably wrong... like very wrong...
+
 | A/B          |   A Cooperates   |    A Defects   |
 |--------------|------------------|----------------|
 | B Cooperates |    2.0/2.0       |    3.0/0.0     |
